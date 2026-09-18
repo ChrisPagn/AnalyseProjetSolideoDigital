@@ -1,0 +1,71 @@
+@page "/connexion"
+@inject AuthClient AuthClient
+@inject CookieAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Connexion</PageTitle>
+
+<MudPaper Class="pa-6 mt-8" Elevation="3">
+    <MudText Typo="Typo.h5" Class="mb-4">AnalyseProjetSolideoDigital</MudText>
+
+    <MudForm @ref="_form" Model="@this" Validation="@ValiderFormulaire">
+        <MudTextField T="string" Label="E-mail" @bind-Value="_email" Required="true"
+                       RequiredError="L'e-mail est requis." InputType="InputType.Email"
+                       Class="mb-4" Style="min-height:44px" />
+
+        <MudTextField T="string" Label="Mot de passe" @bind-Value="_password" Required="true"
+                       RequiredError="Le mot de passe est requis." InputType="InputType.Password"
+                       Class="mb-4" Style="min-height:44px" />
+
+        @if (_messageErreur is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@_messageErreur</MudAlert>
+        }
+
+        <MudButton ButtonType="ButtonType.Button" Variant="Variant.Filled" Color="Color.Primary"
+                   FullWidth="true" Size="Size.Large" Disabled="@_enCours" OnClick="@ConnecterAsync">
+            @(_enCours ? "Connexion..." : "Se connecter")
+        </MudButton>
+    </MudForm>
+</MudPaper>
+
+@code {
+    private MudForm? _form;
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string? _messageErreur;
+    private bool _enCours;
+
+    private Func<string, string?> ValiderFormulaire => _ => null;
+
+    private async Task ConnecterAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        _messageErreur = null;
+
+        var (succes, erreur) = await AuthClient.LoginAsync(_email, _password);
+
+        if (succes)
+        {
+            AuthStateProvider.NotifierChangementEtat();
+            Navigation.NavigateTo("/", forceLoad: false);
+        }
+        else
+        {
+            _messageErreur = erreur;
+        }
+
+        _enCours = false;
+    }
+}

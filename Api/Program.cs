@@ -1,8 +1,15 @@
+using System.Threading.RateLimiting;
 using Api.Data;
 using Api.Data.Entities;
+using Api.Validators;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Components.WebAssembly.Server;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Shared.Dtos.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +18,24 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestDtoValidator>();
+builder.Services.AddFluentValidationAutoValidation();
+
+// CORS : uniquement en dev local, où le Client (port 5138) et l'Api (port 5118) tournent sur
+// des origines séparées. En production, même conteneur/origine (Prompt Maître 7.3) — pas de CORS.
+const string PolitiqueCorsDev = "DevClient";
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(PolitiqueCorsDev, policy => policy
+            .WithOrigins("http://localhost:5138", "https://localhost:7275")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials());
+    });
+}
 
 // Base de données : SQLite en dev, MySQL en prod (Pomelo) — sélection via configuration,
 // pas de chemin ou de provider hardcodé (Prompt Maître 6.1, 14).
@@ -38,18 +63,69 @@ builder.Services
         options.Password.RequireNonAlphanumeric = true;
         options.Password.RequireUppercase = true;
         options.Password.RequireDigit = true;
+
+        // Verrouillage du compte après tentatives échouées répétées — complète le rate limiting
+        // HTTP ci-dessous par une protection au niveau du compte lui-même (Prompt Maître 7.5).
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        options.Lockout.AllowedForNewUsers = true;
+
+        options.User.RequireUniqueEmail = true;
     })
     .AddEntityFrameworkStores<AnalyseProjetDbContext>()
     .AddSignInManager();
 
+builder.Services.AddScoped<Api.Services.AuthService>();
+
 builder.Services.AddAuthorization();
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
-    .AddCookie(IdentityConstants.ApplicationScheme);
+    .AddCookie(IdentityConstants.ApplicationScheme, options =>
+    {
+        options.Cookie.HttpOnly = true;
+
+        // Strict en production (même origine, Prompt Maître 7.3) ; Lax en dev local, où Client
+        // (5138) et Api (5118) sont sur des origines séparées — Strict bloquerait alors le cookie
+        // sur toute requête cross-origin même avec CORS + credentials activés.
+        options.Cookie.SameSite = builder.Environment.IsDevelopment() ? SameSiteMode.Lax : SameSiteMode.Strict;
+
+        // SameAsRequest (pas Always) : le cookie est marqué Secure dès que la requête est HTTPS
+        // (le cas en production, derrière Caddy — Prompt Maître 7.5), mais reste utilisable en
+        // dev local et dans les tests d'intégration qui tournent en HTTP simple (TestServer).
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+
+        // Endpoints API : pas de redirection HTML vers une page de login inexistante côté Api,
+        // on renvoie un statut HTTP exploitable par le Client Blazor.
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
 
 // Rate limiting sur l'authentification — posture de sécurité requise dès la V1 pour un outil
-// mono-utilisateur exposé publiquement (Prompt Maître 7.5). Implémentation complète prévue à
-// l'étape 2 (Auth minimale) ; le service est enregistré ici pour que l'étape 1 pose le socle.
-builder.Services.AddRateLimiter(_ => { });
+// mono-utilisateur exposé publiquement (Prompt Maître 7.5). Politique nommée "login" appliquée
+// sur POST /api/auth/login via [EnableRateLimiting("login")].
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("login", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "inconnu",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 
 var app = builder.Build();
 
@@ -62,7 +138,25 @@ if (app.Environment.IsDevelopment())
     var db = scope.ServiceProvider.GetRequiredService<AnalyseProjetDbContext>();
     db.Database.Migrate();
     DbSeeder.Seed(db);
+    await AdminSeeder.SeedAsync(scope.ServiceProvider, app.Configuration, app.Logger);
 }
+else
+{
+    // En production aussi, le compte admin unique doit exister au démarrage — mais sans seed
+    // de données de démonstration (Prompt Maître 9 : outil mono-utilisateur).
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AnalyseProjetDbContext>();
+    db.Database.Migrate();
+    await AdminSeeder.SeedAsync(scope.ServiceProvider, app.Configuration, app.Logger);
+}
+
+// Caddy termine le TLS et transmet en HTTP en interne au conteneur app (Prompt Maître 7.3) :
+// sans ceci, l'Api croirait que toutes les requêtes sont en HTTP et ne marquerait jamais le
+// cookie Identity comme Secure en production (CookieSecurePolicy.SameAsRequest ci-dessus).
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 app.UseHttpsRedirection();
 
@@ -70,6 +164,13 @@ app.UseHttpsRedirection();
 // (un seul service "app" dans docker-compose.yml, cohérent avec Prompt Maître 7.3).
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
+
+app.UseRateLimiter();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors(PolitiqueCorsDev);
+}
 
 app.UseAuthentication();
 app.UseAuthorization();

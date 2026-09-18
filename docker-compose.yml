@@ -8,6 +8,8 @@ services:
       - ConnectionStrings__DefaultConnection=Data Source=/app/data/analyseprojet.db
       - DatabaseProvider=Sqlite
       - ASPNETCORE_ENVIRONMENT=Production
+      - AdminAccount__Email=${ADMINACCOUNT__EMAIL}
+      - AdminAccount__Password=${ADMINACCOUNT__PASSWORD}
 
   caddy:
     image: caddy:2-alpine

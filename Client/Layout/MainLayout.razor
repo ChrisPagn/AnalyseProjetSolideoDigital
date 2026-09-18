@@ -1,3 +1,53 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject AuthClient AuthClient
+@inject CookieAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
 
-@Body
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<AuthorizeView>
+    <Authorized>
+        <MudLayout>
+            <MudAppBar Elevation="1">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@BasculerDrawer" />
+                <MudText Typo="Typo.h6" Class="ml-2">AnalyseProjetSolideoDigital</MudText>
+                <MudSpacer />
+                <MudText Typo="Typo.body2" Class="mr-4 d-none d-sm-flex">@context.User.Identity?.Name</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" OnClick="@DeconnecterAsync" />
+            </MudAppBar>
+            <MudDrawer @bind-Open="@_drawerOuvert" ClipMode="DrawerClipMode.Always" Elevation="2">
+                <MudNavMenu>
+                    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Tableau de bord</MudNavLink>
+                    <MudNavLink Href="clients" Icon="@Icons.Material.Filled.Business">Clients</MudNavLink>
+                    <MudNavLink Href="projets" Icon="@Icons.Material.Filled.Folder">Projets</MudNavLink>
+                </MudNavMenu>
+            </MudDrawer>
+            <MudMainContent>
+                <MudContainer MaxWidth="MaxWidth.Large" Class="my-4 pt-4">
+                    @Body
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
+    </Authorized>
+    <NotAuthorized>
+        <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+            @Body
+        </MudContainer>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private bool _drawerOuvert = true;
+
+    private void BasculerDrawer() => _drawerOuvert = !_drawerOuvert;
+
+    private async Task DeconnecterAsync()
+    {
+        await AuthClient.LogoutAsync();
+        AuthStateProvider.NotifierChangementEtat();
+        Navigation.NavigateTo("/connexion", forceLoad: false);
+    }
+}

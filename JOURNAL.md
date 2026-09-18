@@ -75,3 +75,70 @@
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — première validation de l'étape, pas encore de commit créé (en
 attente de validation de l'étape par l'utilisateur avant commit, conformément au mode strict).
+
+## Étape 2 — Auth minimale (2026-09-18)
+
+### Contenu réalisé
+- Mécanisme d'authentification tranché avec l'utilisateur : cookie ASP.NET Core Identity
+  (HttpOnly), pas de JWT — cohérent avec le déploiement mono-conteneur (Client et Api sur la
+  même origine en production, Prompt Maître 7.3).
+- `Shared/Dtos/Auth` : `LoginRequestDto`, `CurrentUserDto`.
+- `Api/Validators/LoginRequestDtoValidator` (FluentValidation, section 5.3) : e-mail et mot de
+  passe requis, format e-mail validé côté serveur.
+- `Api/Services/AuthService` : logique de connexion/déconnexion isolée des Controllers (section
+  5.1) — vérification de mot de passe factice si l'e-mail n'existe pas, pour ne pas révéler par
+  timing si un compte existe.
+- `Api/Controllers/AuthController` : `POST /api/auth/login` (rate limité), `POST /api/auth/logout`
+  (authentifié), `GET /api/auth/me` — orchestration uniquement, pas de logique métier.
+- `Api/Data/AdminSeeder` : crée le compte admin unique (section 9) au démarrage à partir de la
+  configuration (`AdminAccount:Email` / `AdminAccount:Password` — variables d'environnement en
+  prod, user-secrets en dev), jamais de mot de passe hardcodé (interdiction absolue, section 14).
+- `Program.cs` : politique de mot de passe renforcée + `Lockout` (5 tentatives, 15 min) sur le
+  compte Identity ; rate limiting HTTP dédié (`[EnableRateLimiting("login")]`, 5 requêtes/minute
+  par IP, 429 au-delà) sur l'endpoint de login — les deux mécanismes se complètent (section 7.5) ;
+  `ForwardedHeaders` pour que l'Api reconnaisse le HTTPS terminé par Caddy en amont
+  (`CookieSecurePolicy.SameAsRequest`) ; CORS + cookie `SameSite=Lax` activés **uniquement** en
+  environnement Development (Client et Api sur des ports séparés en dev local) — `SameSite=Strict`
+  en production où tout passe par la même origine.
+- Client Blazor : `CookieAuthenticationStateProvider` (interroge `/api/auth/me`), `AuthClient`
+  (wrapper HttpClient typé avec `BrowserRequestCredentials.Include` pour que le cookie voyage en
+  dev cross-origin), page `Login.razor` (MudBlazor, responsive, touch target ≥ 44px),
+  `MainLayout.razor` reconstruit avec `MudLayout`/`MudAppBar`/`MudDrawer` repliable affiché
+  seulement si authentifié, `RedirectToLogin` + `AuthorizeRouteView` dans `App.razor`, page
+  `Index.razor` protégée par `[Authorize]`.
+- MudBlazor câblé pour de vrai (services, CSS/JS, thème) — posé à l'étape 1 mais jamais utilisé
+  jusqu'ici.
+- Tests xUnit (`Api.Tests/Controllers/AuthControllerTests.cs` et `AuthRateLimitingTests.cs`) :
+  `/me` anonyme, login valide pose un cookie, mauvais mot de passe / e-mail inexistant → 401 sans
+  distinction, login puis `/me` authentifié, logout sans session → 401, DTO invalide → 400,
+  rate limiting → 429 après 5 requêtes/minute. 12/12 tests passent au total (4 hérités de
+  l'étape 1 + 8 nouveaux). `AnalyseProjetWebApplicationFactory` dédiée : base SQLite en mémoire,
+  identifiants admin de test injectés via configuration.
+
+### Décisions d'architecture prises
+- Cookie Identity plutôt que JWT — décision validée avec l'utilisateur, la plus simple et la plus
+  sûre par défaut vu que Client et Api partagent la même origine en production.
+- `CookieSecurePolicy.SameAsRequest` (pas `Always`) : nécessaire pour que le cookie fonctionne en
+  dev local HTTP et dans `WebApplicationFactory` (HTTP simple sans TLS), tout en restant marqué
+  `Secure` en production dès que la requête est HTTPS (via `ForwardedHeaders`, Caddy terminant le
+  TLS en amont).
+- CORS + `SameSite=Lax` uniquement en environnement Development : nécessaire car le
+  BlazorWebAssembly DevServer standalone (template `blazorwasm --empty`, pas le gabarit
+  "Hosted") ne propose **pas** de mécanisme de proxy `/api/*` fonctionnel en .NET 9 contrairement
+  à ce qui a été tenté initialement (`--proxy-config-file` : cette option n'existe pas pour ce
+  gabarit et a été abandonnée après vérification directe de la documentation Microsoft). En
+  production, ce contournement est inactif (même origine, `SameSite=Strict`) — aucun compromis de
+  sécurité en prod.
+- `wwwroot/appsettings.Development.json` (Client) fixe `ApiBaseUrl` vers `http://localhost:5118/`
+  pour le dev local ; absent en production, où le Client retombe sur l'origine courante.
+
+### Problèmes connus / points ouverts
+- Aucun nouveau point ouvert. Les points de l'étape 1 (noms de phases 5-18 provisoires, seuils
+  `NiveauParPhases` des Blocs B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables.
+- Testé manuellement de bout en bout dans un vrai navigateur (Chrome headless piloté via Chrome
+  DevTools Protocol) : page de connexion (desktop et mobile 375px), saisie, connexion réussie,
+  redirection vers le tableau de bord authentifié avec AppBar/drawer/e-mail affiché, et validation
+  que la page de connexion ne montre aucune UI authentifiée tant que la session n'existe pas.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
