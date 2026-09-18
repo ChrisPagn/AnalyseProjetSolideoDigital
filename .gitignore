@@ -11,6 +11,7 @@ Api/data/
 
 ## Docker / volumes locaux de déploiement
 data/
+.env
 
 ## IDE
 .vs/
