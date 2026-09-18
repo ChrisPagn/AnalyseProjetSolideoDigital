@@ -1,0 +1,85 @@
+@inject RegistresApiClient RegistresApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogAsync">
+        Ajouter un risque
+    </MudButton>
+</MudStack>
+
+@if (_risques is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_risques.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucun risque enregistré pour ce projet.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_risques" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Probabilité</MudTh>
+            <MudTh>Impact</MudTh>
+            <MudTh>Mesure</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Description">@context.Description</MudTd>
+            <MudTd DataLabel="Probabilité">@context.Probabilite</MudTd>
+            <MudTd DataLabel="Impact">@context.Impact</MudTd>
+            <MudTd DataLabel="Mesure">@context.Mesure</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<RisqueRegistreDto>? _risques;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _risques = await RegistresApi.GetRisquesAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var parametres = new DialogParameters<RisqueFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<RisqueFormDialog>("Nouveau risque", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(RisqueRegistreDto risque)
+    {
+        var succes = await RegistresApi.SupprimerRisqueAsync(ProjetId, risque.Id);
+        if (succes)
+        {
+            Snackbar.Add("Risque supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+}

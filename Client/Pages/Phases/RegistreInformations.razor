@@ -1,0 +1,125 @@
+@inject RegistresApiClient RegistresApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AjouterAsync())">
+        Ajouter une information
+    </MudButton>
+</MudStack>
+
+@if (_informations is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_informations.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucune information enregistrée pour cette phase.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_informations" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Libellé</MudTh>
+            <MudTh>Valeur</MudTh>
+            <MudTh>Source</MudTh>
+            <MudTh>Statut</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Libellé">@context.Libelle</MudTd>
+            <MudTd DataLabel="Valeur">@context.Valeur</MudTd>
+            <MudTd DataLabel="Source">@LibelleSource(context.Source)</MudTd>
+            <MudTd DataLabel="Statut">
+                <MudChip T="string" Size="Size.Small" Color="@CouleurStatut(context.Statut)">@LibelleStatut(context.Statut)</MudChip>
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => AjouterAsync(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int PhaseId { get; set; }
+    [Parameter] public EventCallback SurChangement { get; set; }
+
+    private IReadOnlyList<InformationRegistreDto>? _informations;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _informations = await RegistresApi.GetInformationsAsync(ProjetId, PhaseId);
+    }
+
+    private async Task AjouterAsync(InformationRegistreDto? existante = null)
+    {
+        var parametres = new DialogParameters<InformationFormDialog>
+        {
+            { x => x.ProjetId, ProjetId },
+            { x => x.PhaseIdParDefaut, PhaseId },
+            { x => x.Information, existante }
+        };
+        var dialog = await DialogService.ShowAsync<InformationFormDialog>(
+            existante is null ? "Nouvelle information" : "Modifier l'information", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(InformationRegistreDto information)
+    {
+        var succes = await RegistresApi.SupprimerInformationAsync(ProjetId, information.Id);
+        if (succes)
+        {
+            Snackbar.Add("Information supprimée.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+
+    private static string LibelleSource(SourceInformation source) => source switch
+    {
+        SourceInformation.Declaratif => "Déclaratif",
+        SourceInformation.Observation => "Observation",
+        SourceInformation.Document => "Document",
+        SourceInformation.SystemeExistant => "Système existant",
+        SourceInformation.PropositionIa => "Proposition IA",
+        SourceInformation.DecisionTechnique => "Décision technique",
+        _ => source.ToString()
+    };
+
+    private static string LibelleStatut(StatutInformation statut) => statut switch
+    {
+        StatutInformation.Inconnu => "Inconnu",
+        StatutInformation.AConfirmer => "À confirmer",
+        StatutInformation.Valide => "Validé",
+        StatutInformation.Bloquant => "Bloquant",
+        StatutInformation.Proposition => "Proposition",
+        StatutInformation.HorsPerimetre => "Hors périmètre",
+        _ => statut.ToString()
+    };
+
+    private static Color CouleurStatut(StatutInformation statut) => statut switch
+    {
+        StatutInformation.Valide => Color.Success,
+        StatutInformation.AConfirmer => Color.Warning,
+        StatutInformation.Bloquant => Color.Error,
+        _ => Color.Default
+    };
+}

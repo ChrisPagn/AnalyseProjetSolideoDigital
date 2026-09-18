@@ -57,11 +57,6 @@ else
                         Dernière mise à jour : @_phaseActive.DateMaj.ToLocalTime().ToString("g")
                     </MudText>
 
-                    <MudText Typo="Typo.body1" Class="mb-4">
-                        Le contenu détaillé de cette phase (questions, informations à saisir) sera construit
-                        aux étapes suivantes du développement (Registres et Domaine projet analysé).
-                    </MudText>
-
                     <MudStack Row="true" Spacing="2" Class="mb-4">
                         <MudButton Variant="@(_phaseActive.Statut == Shared.Enums.StatutPhase.NonCommencee ? Variant.Filled : Variant.Outlined)"
                                    Color="Color.Default" Size="Size.Small"
@@ -93,6 +88,9 @@ else
                         </MudButton>
                     </MudStack>
                 </MudPaper>
+
+                <RegistresPhase ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" PhaseNumero="@_phaseActive.Numero"
+                                 SurChangement="@RafraichirMaturiteAsync" />
             }
         </MudItem>
     </MudGrid>
@@ -119,6 +117,12 @@ else
     {
         Navigation.NavigateTo($"/projets/{ProjetId}/phases/{numero}");
         return Task.CompletedTask;
+    }
+
+    private async Task RafraichirMaturiteAsync()
+    {
+        _projet = await ProjetsApi.GetParIdAsync(ProjetId);
+        StateHasChanged();
     }
 
     private async Task ChangerStatutAsync(Shared.Enums.StatutPhase statut)

@@ -75,8 +75,11 @@ builder.Services
     .AddEntityFrameworkStores<AnalyseProjetDbContext>()
     .AddSignInManager();
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Api.Services.IUtilisateurCourantAccessor, Api.Services.HttpUtilisateurCourantAccessor>();
 builder.Services.AddScoped<Api.Services.AuthService>();
 builder.Services.AddScoped<Api.Services.MaturiteCalculatorService>();
+builder.Services.AddScoped<Api.Services.CodeSequenceService>();
 builder.Services.AddScoped<Api.Actions.CreateProjetAction>();
 builder.Services.AddScoped<Api.Actions.DeleteClientAction>();
 builder.Services.AddScoped<Api.Actions.UpdateStatutPhaseAction>();

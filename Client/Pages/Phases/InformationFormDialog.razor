@@ -1,0 +1,107 @@
+@inject RegistresApiClient RegistresApi
+@inject PhasesApiClient PhasesApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Libellé" @bind-Value="_libelle" Required="true"
+                          RequiredError="Le libellé est requis." Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Valeur" @bind-Value="_valeur" Lines="2" Class="mb-3" />
+            <MudSelect T="SourceInformation" Label="Source" @bind-Value="_source" Class="mb-3">
+                <MudSelectItem Value="SourceInformation.Declaratif">Déclaratif (client)</MudSelectItem>
+                <MudSelectItem Value="SourceInformation.Observation">Observation vérifiée</MudSelectItem>
+                <MudSelectItem Value="SourceInformation.Document">Document fourni</MudSelectItem>
+                <MudSelectItem Value="SourceInformation.SystemeExistant">Système/outil existant</MudSelectItem>
+                <MudSelectItem Value="SourceInformation.PropositionIa">Proposition IA/analyste</MudSelectItem>
+                <MudSelectItem Value="SourceInformation.DecisionTechnique">Décision technique</MudSelectItem>
+            </MudSelect>
+            <MudSelect T="StatutInformation" Label="Statut" @bind-Value="_statut" Class="mb-3">
+                <MudSelectItem Value="StatutInformation.Inconnu">Inconnu</MudSelectItem>
+                <MudSelectItem Value="StatutInformation.AConfirmer">À confirmer</MudSelectItem>
+                <MudSelectItem Value="StatutInformation.Valide">Validé</MudSelectItem>
+                <MudSelectItem Value="StatutInformation.Bloquant">Bloquant</MudSelectItem>
+                <MudSelectItem Value="StatutInformation.Proposition">Proposition</MudSelectItem>
+                <MudSelectItem Value="StatutInformation.HorsPerimetre">Hors périmètre</MudSelectItem>
+            </MudSelect>
+            @if (_phases is not null)
+            {
+                <MudSelect T="int?" Label="Phase associée" @bind-Value="_phaseId" Clearable="true" Class="mb-3">
+                    @foreach (var phase in _phases)
+                    {
+                        <MudSelectItem T="int?" Value="@phase.Id">@phase.Numero. @phase.Nom</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int? PhaseIdParDefaut { get; set; }
+    [Parameter] public InformationRegistreDto? Information { get; set; }
+
+    private MudForm? _form;
+    private IReadOnlyList<PhaseDto>? _phases;
+    private string _libelle = string.Empty;
+    private string? _valeur;
+    private SourceInformation _source = SourceInformation.Declaratif;
+    private StatutInformation _statut = StatutInformation.Inconnu;
+    private int? _phaseId;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _phases = await PhasesApi.GetToutesAsync(ProjetId);
+
+        if (Information is not null)
+        {
+            _libelle = Information.Libelle;
+            _valeur = Information.Valeur;
+            _source = Information.Source;
+            _statut = Information.Statut;
+            _phaseId = Information.PhaseId;
+        }
+        else
+        {
+            _phaseId = PhaseIdParDefaut;
+        }
+    }
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertInformationRegistreDto(_phaseId, _libelle, _valeur, _source, _statut);
+
+        var succes = Information is null
+            ? await RegistresApi.CreerInformationAsync(ProjetId, dto) is not null
+            : await RegistresApi.ModifierInformationAsync(ProjetId, Information.Id, dto);
+
+        _enCours = false;
+
+        if (succes)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

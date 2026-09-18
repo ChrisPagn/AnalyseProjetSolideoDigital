@@ -251,3 +251,67 @@ Voir `git log` / `git status` — en attente de validation de l'étape par l'uti
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Étape 5 — Registres (2026-09-18)
+
+### Contenu réalisé
+- Trois décisions de conception validées avec l'utilisateur avant de coder :
+  1. Génération des codes (INF-xxx, Q-xxx, R-xxx, DEC-xxx) via un compteur dédié par
+     projet+préfixe (`CompteurCode`), jamais par calcul MAX+1 — un numéro n'est donc jamais
+     réutilisé après suppression d'une ligne.
+  2. Journalisation de l'historique **générique**, via interception de
+     `AnalyseProjetDbContext.SaveChanges(Async)` (change tracking EF Core), plutôt que du code
+     manuel par Action — couvre déjà tout champ scalaire modifié sur les 4 registres, y compris
+     pour des champs ou Actions futurs.
+  3. Rattachement `PhaseId` "déduit du contexte + modifiable" : pré-rempli avec la phase consultée
+     à la création, mais reste un select modifiable dans le formulaire (et vue transverse possible
+     via le paramètre `?phaseId=` optionnel sur les endpoints GET).
+- `Api/Data/Entities/CompteurCode` + migration `AddCompteurCode` ;
+  `Api/Services/CodeSequenceService` (génération atomique des codes).
+- `AnalyseProjetDbContext` : override de `SaveChanges`/`SaveChangesAsync` qui capture, avant
+  persistance, toute propriété scalaire modifiée sur `InformationRegistre`, `QuestionRegistre`,
+  `RisqueRegistre`, `DecisionRegistre` (liste `TypesJournalises`) et écrit une ligne
+  `HistoriqueModification` par champ réellement changé (ignore les no-op). `ModifiePar` vient d'un
+  nouveau `IUtilisateurCourantAccessor` (implémentation HTTP basée sur le claim e-mail), injecté en
+  paramètre optionnel du DbContext pour ne pas casser les tests qui l'instancient directement.
+- `Shared/Dtos/Registres` : DTOs des 4 registres + `HistoriqueModificationDto`.
+- `Api/Validators` : un validator FluentValidation par registre (formats/longueurs uniquement —
+  leçon de l'étape 3 : pas de règle asynchrone dans ces validators).
+- Controllers `InformationsRegistreController`, `QuestionsRegistreController` (recalcule et
+  persiste `NiveauMaturite` après chaque création/modification/suppression, une question bloquante
+  pouvant plafonner le niveau — Prompt Maître 4.3), `RisquesRegistreController`,
+  `DecisionsRegistreController` (tous imbriqués sous `/api/projets/{projetId}/...`, `[Authorize]`),
+  et `HistoriqueController` (lecture seule — aucun endpoint d'écriture, alimenté uniquement par le
+  DbContext).
+- Client Blazor : `RegistresApiClient`, composant `RegistresPhase.razor` (onglets MudBlazor
+  Informations/Questions/Risques/Décisions) intégré directement dans `PhasesProjet.razor` sous le
+  panneau de détail de la phase active, avec ses 4 sous-composants dédiés
+  (`RegistreInformations`, `RegistreQuestions`, `RegistreRisques`, `RegistreDecisions`) et leurs
+  dialogs de formulaire. Le chip de maturité en en-tête se rafraîchit automatiquement après tout
+  changement touchant `QuestionRegistre` (callback `SurChangement`).
+- Tests xUnit : `CodeSequenceServiceTests` (codes successifs, compteurs indépendants par
+  projet/préfixe, non-réutilisation après suppression), `HistoriqueModificationTests` (le
+  mécanisme générique capture les bons champs, ignore les no-op et les suppressions, ignore les
+  entités hors périmètre comme `Projet`), `RegistresControllerTests` (CRUD des 4 registres via
+  HTTP, génération de codes réels, effet d'une question bloquante sur la maturité via l'API,
+  historique consultable après une vraie modification HTTP). 62/62 tests passent au total
+  (41 hérités des étapes 1-4 + 21 nouveaux).
+- Flux vérifié dans un vrai navigateur : navigation vers une phase, ajout d'une information
+  (code `INF-001` généré), ajout d'une question, marquage résolue, suppression — tout avec
+  confirmation visuelle et rafraîchissement correct des listes.
+
+### Décisions d'architecture prises
+- Voir les 3 décisions validées avec l'utilisateur en tête de section.
+- `IUtilisateurCourantAccessor` en paramètre optionnel (nullable) du constructeur du DbContext,
+  plutôt qu'obligatoire : permet aux tests existants (`new AnalyseProjetDbContext(options)`, sans
+  DI complète) de continuer à fonctionner sans modification, tout en activant la capture de
+  `ModifiePar` quand le service est disponible (production, tests dédiés à l'historique).
+
+### Problèmes connus / points ouverts
+- Aucun nouveau bug applicatif détecté cette fois — la journalisation générique et la génération
+  de codes ont fonctionné correctement dès la première implémentation, tests inclus.
+- Les points des étapes 1-4 (noms de phases 5-18 provisoires, seuils `NiveauParPhases` des Blocs
+  B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.

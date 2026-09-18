@@ -1,0 +1,126 @@
+@inject RegistresApiClient RegistresApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => OuvrirDialogAsync())">
+        Ajouter une question
+    </MudButton>
+</MudStack>
+
+@if (_questions is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_questions.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucune question enregistrée pour cette phase.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_questions" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Question</MudTh>
+            <MudTh>Importance</MudTh>
+            <MudTh>Statut</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Question">@context.Question</MudTd>
+            <MudTd DataLabel="Importance">
+                @if (context.Importance == ImportanceQuestion.Bloquante)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error">Bloquante</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default">Normale</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Statut">
+                <MudChip T="string" Size="Size.Small" Color="@(context.Statut == StatutQuestion.Resolue ? Color.Success : Color.Warning)">
+                    @(context.Statut == StatutQuestion.Resolue ? "Résolue" : "Ouverte")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                @if (context.Statut == StatutQuestion.Ouverte)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success"
+                                   title="Marquer résolue" OnClick="@(() => MarquerResolueAsync(context))" />
+                }
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int PhaseId { get; set; }
+    [Parameter] public EventCallback SurChangement { get; set; }
+
+    private IReadOnlyList<QuestionRegistreDto>? _questions;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _questions = await RegistresApi.GetQuestionsAsync(ProjetId, PhaseId);
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var parametres = new DialogParameters<QuestionFormDialog>
+        {
+            { x => x.ProjetId, ProjetId },
+            { x => x.PhaseIdParDefaut, PhaseId }
+        };
+        var dialog = await DialogService.ShowAsync<QuestionFormDialog>("Nouvelle question", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+            await SurChangement.InvokeAsync();
+        }
+    }
+
+    private async Task MarquerResolueAsync(QuestionRegistreDto question)
+    {
+        var dto = new UpsertQuestionRegistreDto(question.PhaseId, question.Question, question.Importance, StatutQuestion.Resolue);
+        var succes = await RegistresApi.ModifierQuestionAsync(ProjetId, question.Id, dto);
+
+        if (succes)
+        {
+            Snackbar.Add("Question marquée résolue.", Severity.Success);
+            await ChargerAsync();
+            await SurChangement.InvokeAsync();
+        }
+        else
+        {
+            Snackbar.Add("Impossible de mettre à jour la question.", Severity.Error);
+        }
+    }
+
+    private async Task SupprimerAsync(QuestionRegistreDto question)
+    {
+        var succes = await RegistresApi.SupprimerQuestionAsync(ProjetId, question.Id);
+        if (succes)
+        {
+            Snackbar.Add("Question supprimée.", Severity.Success);
+            await ChargerAsync();
+            await SurChangement.InvokeAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+}

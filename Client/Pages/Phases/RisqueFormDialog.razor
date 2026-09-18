@@ -1,0 +1,57 @@
+@inject RegistresApiClient RegistresApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Description" @bind-Value="_description" Required="true"
+                          RequiredError="La description est requise." Lines="2" Class="mb-3" />
+            <MudTextField T="string" Label="Probabilité" @bind-Value="_probabilite" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Impact" @bind-Value="_impact" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Mesure de mitigation" @bind-Value="_mesure" Lines="2" Class="mb-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+
+    private MudForm? _form;
+    private string _description = string.Empty;
+    private string? _probabilite;
+    private string? _impact;
+    private string? _mesure;
+    private bool _enCours;
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertRisqueRegistreDto(_description, _probabilite, _impact, _mesure);
+        var resultat = await RegistresApi.CreerRisqueAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

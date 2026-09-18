@@ -1,0 +1,25 @@
+@inject RegistresApiClient RegistresApi
+
+<MudPaper Class="pa-4 mt-4" Elevation="1">
+    <MudTabs>
+        <MudTabPanel Text="Informations">
+            <RegistreInformations ProjetId="@ProjetId" PhaseId="@PhaseId" SurChangement="@SurChangement" />
+        </MudTabPanel>
+        <MudTabPanel Text="Questions">
+            <RegistreQuestions ProjetId="@ProjetId" PhaseId="@PhaseId" SurChangement="@SurChangement" />
+        </MudTabPanel>
+        <MudTabPanel Text="Risques">
+            <RegistreRisques ProjetId="@ProjetId" />
+        </MudTabPanel>
+        <MudTabPanel Text="Décisions">
+            <RegistreDecisions ProjetId="@ProjetId" />
+        </MudTabPanel>
+    </MudTabs>
+</MudPaper>
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int PhaseId { get; set; }
+    [Parameter] public int PhaseNumero { get; set; }
+    [Parameter] public EventCallback SurChangement { get; set; }
+}

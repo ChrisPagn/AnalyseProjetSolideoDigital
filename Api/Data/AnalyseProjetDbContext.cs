@@ -1,10 +1,13 @@
 using Api.Data.Entities;
+using Api.Services;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Data;
 
-public class AnalyseProjetDbContext(DbContextOptions<AnalyseProjetDbContext> options)
+public class AnalyseProjetDbContext(
+    DbContextOptions<AnalyseProjetDbContext> options,
+    IUtilisateurCourantAccessor? utilisateurCourantAccessor = null)
     : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<Client> Clients => Set<Client>();
@@ -26,6 +29,7 @@ public class AnalyseProjetDbContext(DbContextOptions<AnalyseProjetDbContext> opt
     public DbSet<Automatisation> Automatisations => Set<Automatisation>();
     public DbSet<CritereAcceptation> CriteresAcceptation => Set<CritereAcceptation>();
     public DbSet<LienTracabilite> LiensTracabilite => Set<LienTracabilite>();
+    public DbSet<CompteurCode> CompteursCode => Set<CompteurCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -272,5 +276,102 @@ public class AnalyseProjetDbContext(DbContextOptions<AnalyseProjetDbContext> opt
                 "CK_LienTracabilite_AuMoinsUnLien",
                 "\"ProblemeId\" IS NOT NULL OR \"FonctionnaliteId\" IS NOT NULL OR \"EntiteId\" IS NOT NULL OR \"CritereAcceptationId\" IS NOT NULL"));
         });
+
+        // --- CompteurCode : génération des codes INF-xxx/Q-xxx/R-xxx/DEC-xxx (Prompt Maître 4.3) ---
+        builder.Entity<CompteurCode>(e =>
+        {
+            e.Property(c => c.Prefixe).IsRequired().HasMaxLength(10);
+            e.HasIndex(c => new { c.ProjetId, c.Prefixe }).IsUnique();
+        });
+    }
+
+    /// <summary>
+    /// Entités des 4 registres (Prompt Maître 4.1) dont chaque modification de champ scalaire est
+    /// journalisée automatiquement dans HistoriqueModification — mécanisme générique choisi pour
+    /// ne nécessiter aucun code supplémentaire par futur champ ou par future Action (section 5.5).
+    /// </summary>
+    private static readonly Type[] TypesJournalises =
+    [
+        typeof(InformationRegistre),
+        typeof(QuestionRegistre),
+        typeof(RisqueRegistre),
+        typeof(DecisionRegistre)
+    ];
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        var entreesHistorique = CapturerModifications();
+        var resultat = base.SaveChanges(acceptAllChangesOnSuccess);
+        PersisterHistorique(entreesHistorique);
+        return resultat;
+    }
+
+    public override async Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        var entreesHistorique = CapturerModifications();
+        var resultat = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        await PersisterHistoriqueAsync(entreesHistorique, cancellationToken);
+        return resultat;
+    }
+
+    private List<HistoriqueModification> CapturerModifications()
+    {
+        var entrees = new List<HistoriqueModification>();
+        var modifiePar = utilisateurCourantAccessor?.ObtenirIdentifiant() ?? "système";
+        var maintenant = DateTime.UtcNow;
+
+        foreach (var entree in ChangeTracker.Entries().Where(
+                     e => e.State == EntityState.Modified && TypesJournalises.Contains(e.Entity.GetType())))
+        {
+            var idProperty = entree.Property("Id");
+            var entiteId = idProperty.CurrentValue is int id ? id : 0;
+
+            foreach (var propriete in entree.Properties.Where(p => p.IsModified && p.Metadata.Name != "Id"))
+            {
+                var ancienneValeur = propriete.OriginalValue?.ToString();
+                var nouvelleValeur = propriete.CurrentValue?.ToString();
+
+                if (ancienneValeur == nouvelleValeur)
+                {
+                    continue;
+                }
+
+                entrees.Add(new HistoriqueModification
+                {
+                    EntiteType = entree.Entity.GetType().Name,
+                    EntiteId = entiteId,
+                    Champ = propriete.Metadata.Name,
+                    AncienneValeur = ancienneValeur,
+                    NouvelleValeur = nouvelleValeur,
+                    ModifiePar = modifiePar,
+                    DateModification = maintenant
+                });
+            }
+        }
+
+        return entrees;
+    }
+
+    private void PersisterHistorique(List<HistoriqueModification> entrees)
+    {
+        if (entrees.Count == 0)
+        {
+            return;
+        }
+
+        HistoriqueModifications.AddRange(entrees);
+        base.SaveChanges(true);
+    }
+
+    private async Task PersisterHistoriqueAsync(List<HistoriqueModification> entrees, CancellationToken cancellationToken)
+    {
+        if (entrees.Count == 0)
+        {
+            return;
+        }
+
+        HistoriqueModifications.AddRange(entrees);
+        await base.SaveChangesAsync(true, cancellationToken);
     }
 }

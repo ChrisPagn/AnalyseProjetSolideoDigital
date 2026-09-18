@@ -1,0 +1,82 @@
+@inject RegistresApiClient RegistresApi
+@inject PhasesApiClient PhasesApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Question" @bind-Value="_question" Required="true"
+                          RequiredError="La question est requise." Lines="2" Class="mb-3" />
+            <MudSelect T="ImportanceQuestion" Label="Importance" @bind-Value="_importance" Class="mb-3">
+                <MudSelectItem Value="ImportanceQuestion.Normale">Normale</MudSelectItem>
+                <MudSelectItem Value="ImportanceQuestion.Bloquante">Bloquante</MudSelectItem>
+            </MudSelect>
+            @if (_importance == ImportanceQuestion.Bloquante)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                    Une question bloquante ouverte plafonne le niveau de maturité du projet à 1
+                    (Prompt Maître 4.3).
+                </MudAlert>
+            }
+            @if (_phases is not null)
+            {
+                <MudSelect T="int?" Label="Phase associée" @bind-Value="_phaseId" Clearable="true" Class="mb-3">
+                    @foreach (var phase in _phases)
+                    {
+                        <MudSelectItem T="int?" Value="@phase.Id">@phase.Numero. @phase.Nom</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int? PhaseIdParDefaut { get; set; }
+
+    private MudForm? _form;
+    private IReadOnlyList<PhaseDto>? _phases;
+    private string _question = string.Empty;
+    private ImportanceQuestion _importance = ImportanceQuestion.Normale;
+    private int? _phaseId;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _phases = await PhasesApi.GetToutesAsync(ProjetId);
+        _phaseId = PhaseIdParDefaut;
+    }
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertQuestionRegistreDto(_phaseId, _question, _importance, StatutQuestion.Ouverte);
+        var resultat = await RegistresApi.CreerQuestionAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}
