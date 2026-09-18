@@ -545,3 +545,63 @@ héritent directement du bon thème sans repasse ultérieure sur les écrans dé
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation par l'utilisateur avant commit.
+
+## Étape 9 — Export Markdown (2026-09-18)
+
+### Contenu réalisé
+- Trois décisions de conception validées avec l'utilisateur avant de coder :
+  1. Livraison par **téléchargement ZIP** (pas d'écriture sur le système de fichiers du serveur) :
+     cohérent avec un déploiement conteneurisé et un usage nomade en RDV client, contrairement à
+     un chemin `clients/[nom]/` littéral sur disque qui aurait mélangé configuration et exports
+     et n'aurait rien produit d'immédiatement récupérable sur l'appareil utilisé en RDV.
+  2. Contenu des 3 sections dynamiques de chaque fichier de phase filtré **strictement par
+     PhaseId** : Informations validées = `InformationRegistre.Statut=Valide` de cette phase,
+     Points ouverts = `InformationRegistre.Statut=AConfirmer` + `QuestionRegistre` Ouvertes de
+     cette phase. `RisqueRegistre` et `DecisionRegistre` n'ont pas de `PhaseId` dans le modèle —
+     listés uniquement dans `ANALYSE.md`, jamais répétés par phase.
+  3. `ANALYSE.md` reprend tout ce que le Prompt Maître décrit explicitement à cet endroit : fiche
+     client, niveau de maturité, encart Demande vs Problème pressenti (§02), tableau des
+     problèmes priorisés avec score et couverture (§04), Risques, Décisions, état des 18 phases,
+     alertes de traçabilité actives (étape 8).
+- `Api/Services/MarkdownExportService` : génère l'archive ZIP en mémoire (`ZipArchive` sur
+  `MemoryStream`, aucune écriture disque), un fichier par phase au format
+  `{numero:D2}-{slug-du-nom-de-phase}.md` + `ANALYSE.md`, en respectant le template standardisé du
+  Prompt Maître 4.4 (`## Objectif de la phase`, `## Informations validées (✅)`,
+  `## Points ouverts (⚠️/⛔)`, `## Décisions prises`) pour chaque fichier de phase.
+- `Api/Controllers/ExportsController` (`[Authorize]`) : `GET .../exports/markdown` retourne
+  directement le flux ZIP (`Content-Type: application/zip`, `Content-Disposition` avec le nom de
+  fichier `analyse-{slug-client}.zip`).
+- Client Blazor : `ExportsApiClient` récupère les octets puis délègue le téléchargement réel à un
+  petit script d'interop JS (`wwwroot/js/download.js`, `Blob` + lien `<a download>` synthétique)
+  — Blazor WASM n'a pas de mécanisme natif pour déclencher un téléchargement de fichier binaire.
+  Composant `BoutonExportMarkdown.razor` réutilisable, intégré sur la page Phase (à côté de "Mode
+  entretien") et sur la page Domaine analysé.
+- Tests xUnit : `MarkdownExportServiceTests` (10 tests — présence des 19 fichiers, noms de
+  fichiers de phase corrects, séparation stricte par PhaseId des informations et questions,
+  Risques/Décisions dans ANALYSE.md uniquement, problèmes non couverts et alertes de traçabilité
+  bien reportés), `ExportsControllerTests` (3 tests — Content-Type, nombre de fichiers via HTTP
+  réel, 404 sur projet inexistant). 108/108 tests passent au total (95 hérités des étapes 1-8 +
+  13 nouveaux).
+- Flux vérifié de bout en bout : téléchargement réel via `curl` authentifié (ZIP valide, 19
+  fichiers, contenu conforme au template), et clic du bouton dans un vrai navigateur (requête
+  réseau `200 OK` vers l'endpoint d'export, déclenchement du téléchargement côté client sans
+  erreur).
+
+### Décisions d'architecture prises
+- Voir les 3 décisions validées avec l'utilisateur en tête de section.
+- Encodage `UTF8` explicitement **sans BOM** pour l'écriture des fichiers dans l'archive : un BOM
+  en tête de fichier Markdown ne casse rien à l'affichage mais n'a aucune utilité et a été retiré
+  après l'avoir repéré lors du test manuel du contenu réel du ZIP téléchargé.
+
+### Problèmes connus / points ouverts
+- Les noms de fichiers de phase générés (`05-acteurs-provisoire.md`, etc.) incluent le suffixe
+  "(provisoire)" pour les phases 05-18, car ce suffixe fait partie du `Phase.Nom` stocké en base
+  depuis l'étape 1 — le nom littéral donné en exemple au Prompt Maître 4.4
+  (`18-transfertprompt-maitre.md`, sans "provisoire") ne peut donc pas être atteint exactement
+  tant que ces noms de phase n'auront pas été révisés (point déjà ouvert depuis l'étape 1). Les
+  noms de fichiers générés restent cohérents et lisibles en attendant.
+- Les points des étapes 1-8 (seuils `NiveauParPhases` des Blocs B/C/D non fixés, 2FA/CrowdSec hors
+  périmètre code V1) restent valables.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.

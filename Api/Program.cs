@@ -82,6 +82,7 @@ builder.Services.AddScoped<Api.Services.MaturiteCalculatorService>();
 builder.Services.AddScoped<Api.Services.CodeSequenceService>();
 builder.Services.AddScoped<Api.Services.TracabiliteService>();
 builder.Services.AddScoped<Api.Services.ContradictionDetectorService>();
+builder.Services.AddScoped<Api.Services.MarkdownExportService>();
 builder.Services.AddScoped<Api.Actions.CreateProjetAction>();
 builder.Services.AddScoped<Api.Actions.DeleteClientAction>();
 builder.Services.AddScoped<Api.Actions.UpdateStatutPhaseAction>();

@@ -15,7 +15,10 @@ else
             <MudText Typo="Typo.h4">@_projet.Nom</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary">Domaine du projet analysé — @_projet.ClientNom</MudText>
         </div>
-        <MudChip T="string" Color="@CouleurMaturite(_projet.NiveauMaturite)">@LibelleMaturite(_projet.NiveauMaturite)</MudChip>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <BoutonExportMarkdown ProjetId="@ProjetId" />
+            <MudChip T="string" Color="@CouleurMaturite(_projet.NiveauMaturite)">@LibelleMaturite(_projet.NiveauMaturite)</MudChip>
+        </MudStack>
     </MudStack>
 
     <BandeauAlertesTracabilite ProjetId="@ProjetId" />

@@ -19,6 +19,7 @@ else
             <MudText Typo="Typo.body2" Color="Color.Secondary">@_projet.ClientNom</MudText>
         </div>
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <BoutonExportMarkdown ProjetId="@ProjetId" />
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.RecordVoiceOver"
                        OnClick="@(() => Navigation.NavigateTo($"/projets/{ProjetId}/entretien/{_phaseActive?.Numero}"))"
                        Style="min-height:44px">

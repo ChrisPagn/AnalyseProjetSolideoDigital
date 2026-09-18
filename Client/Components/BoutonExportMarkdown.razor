@@ -1,0 +1,25 @@
+@inject ExportsApiClient ExportsApi
+@inject ISnackbar Snackbar
+
+<MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Download"
+           Disabled="@_enCours" OnClick="@ExporterAsync" Style="min-height:44px">
+    @(_enCours ? "Génération..." : "Exporter en Markdown")
+</MudButton>
+
+@code {
+    [Parameter, EditorRequired] public int ProjetId { get; set; }
+
+    private bool _enCours;
+
+    private async Task ExporterAsync()
+    {
+        _enCours = true;
+        var succes = await ExportsApi.TelechargerMarkdownAsync(ProjetId);
+        _enCours = false;
+
+        if (!succes)
+        {
+            Snackbar.Add("Impossible de générer l'export Markdown.", Severity.Error);
+        }
+    }
+}
