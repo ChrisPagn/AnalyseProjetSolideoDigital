@@ -1,0 +1,14 @@
+@*
+    Bandeau bas de page — style repris du footer du site vitrine Solideo Digital
+    (solideo-digital/resources/views/layouts/app.blade.php) : fond marine, texte beige, accent or.
+    Version minimale adaptée à un outil interne (voir CHARTE-GRAPHIQUE.md, section Footer) : pas
+    de colonnes marketing (Services, Portfolio, Blog) qui n'ont pas de sens hors du site vitrine.
+*@
+<MudPaper Square="true" Elevation="0" Class="pa-4 mt-8" Style="background-color:#1A2B3C;color:#F5F0E8">
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudText Typo="Typo.body2" Style="color:#D4B882">Solideo Digital</MudText>
+            <MudText Typo="Typo.caption" Style="color:#F5F0E8">&copy; @DateTime.Now.Year Solideo Digital. Tous droits réservés.</MudText>
+        </MudStack>
+    </MudContainer>
+</MudPaper>
