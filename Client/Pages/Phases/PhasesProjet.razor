@@ -18,9 +18,16 @@ else
             <MudText Typo="Typo.h4">@_projet.Nom</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary">@_projet.ClientNom</MudText>
         </div>
-        <MudChip T="string" Color="@CouleurMaturite(_projet.NiveauMaturite)">
-            @LibelleMaturite(_projet.NiveauMaturite)
-        </MudChip>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.RecordVoiceOver"
+                       OnClick="@(() => Navigation.NavigateTo($"/projets/{ProjetId}/entretien/{_phaseActive?.Numero}"))"
+                       Style="min-height:44px">
+                Mode entretien
+            </MudButton>
+            <MudChip T="string" Color="@CouleurMaturite(_projet.NiveauMaturite)">
+                @LibelleMaturite(_projet.NiveauMaturite)
+            </MudChip>
+        </MudStack>
     </MudStack>
 
     <MudGrid>

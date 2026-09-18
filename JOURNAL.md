@@ -386,3 +386,56 @@ Voir `git log` / `git status` — en attente de validation de l'étape par l'uti
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Étape 7 — Mode entretien (2026-09-18)
+
+### Contenu réalisé
+- Deux décisions de conception validées avec l'utilisateur avant de coder :
+  1. Les questions guidées "une à la fois" (Prompt Maître section 3) sont codées en dur pour les
+     Phases 01 et 02 uniquement — seules phases du Guide dont chaque question correspond 1-pour-1
+     à une `InformationRegistre`. Les Phases 03/04 (étapes de processus, problèmes quantifiés) et
+     05-18 (non détaillées dans le Guide fourni) renvoient vers les vues détaillées déjà
+     construites aux étapes 5/6 plutôt que d'inventer un mapping question→entité non spécifié par
+     le Prompt Maître.
+  2. Après validation d'une réponse, avancement **automatique** à la question suivante (pas de
+     clic "Suivant" séparé) — optimisé pour la vitesse de saisie en RDV live.
+- `Shared/ModeEntretien/QuestionGuidee.cs` : modèle statique des questions du Bloc A (6 questions
+  Phase 01, 5 questions Phase 02, fidèles aux libellés du Guide des 18 phases), avec source par
+  défaut et indicateur multiligne.
+- Client Blazor : page `ModeEntretien.razor` (route `/projets/{id}/entretien/{numeroPhase?}`) —
+  interface épurée (pas de drawer, pas de tableau, une seule question visible à la fois — Prompt
+  Maître section 3), barre de progression, navigation précédent/suivant, navigation rapide entre
+  les 18 phases par chips. Composant `EntretienQuestionGuidee.razor` : formulaire à un champ
+  (réponse + source), gros boutons tactiles "Validé"/"À confirmer" (≥44px, section 3), qui créent
+  ou mettent à jour directement une `InformationRegistre` existante (pas de duplication en cas de
+  retour arrière puis re-validation). Pour les phases hors Bloc A, message explicite + bouton de
+  redirection vers la vue détaillée de la phase (étape 4). Bouton d'accès "Mode entretien" ajouté
+  sur la page Phase détaillée.
+- Aucun changement côté Api : réutilise entièrement `InformationRegistreController` et
+  `RegistresApiClient` posés à l'étape 5. 77/77 tests xUnit (aucun nouveau test backend — pas de
+  nouvelle logique serveur à cette étape) passent sans régression.
+- Flux vérifié dans un vrai navigateur (desktop et tablette 768px) : réponse à une question →
+  avancement automatique confirmé, retour en arrière → réponse précédente correctement préremplie
+  (donc une revalidation modifie l'entrée existante plutôt que d'en créer une seconde), phase hors
+  Bloc A → redirection claire vers la vue détaillée, rendu tablette conforme à l'esprit "interface
+  épurée, pas de surcharge visuelle" du Prompt Maître.
+
+### Décisions d'architecture prises
+- Voir les 2 décisions validées avec l'utilisateur en tête de section.
+- Le rapprochement réponse-existante↔question se fait par correspondance exacte du libellé de la
+  question sur les `InformationRegistre` de la phase (pas de nouvel identifiant dédié) : suffisant
+  pour un ensemble fixe et codé en dur de questions, évite d'ajouter un champ supplémentaire au
+  modèle de données pour cette seule fonctionnalité.
+
+### Problèmes connus / points ouverts
+- Aucun nouveau bug détecté — étape purement UI, réutilisant une Api déjà testée et éprouvée aux
+  étapes précédentes.
+- Les questions guidées du Bloc A sont limitées aux Phases 01/02 ; si le Guide des 18 phases est
+  complété pour les Blocs B-E dans une future révision du Prompt Maître, `QuestionsGuideesParPhase`
+  devra être étendu en conséquence (voir le TODO implicite déjà noté pour les noms de phases
+  provisoires depuis l'étape 1).
+- Les points des étapes 1-6 (noms de phases 5-18 provisoires, seuils `NiveauParPhases` des Blocs
+  B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.

@@ -1,0 +1,160 @@
+@page "/projets/{ProjetId:int}/entretien/{NumeroPhase:int?}"
+@attribute [Authorize]
+@inject ProjetsApiClient ProjetsApi
+@inject PhasesApiClient PhasesApi
+@inject RegistresApiClient RegistresApi
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Mode entretien — @(_projet?.Nom ?? "Chargement...")</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h5">@(_projet?.Nom)</MudText>
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Close"
+               OnClick="@(() => Navigation.NavigateTo($"/projets/{ProjetId}/phases/{NumeroPhase}"))">
+        Quitter le mode entretien
+    </MudButton>
+</div>
+
+@if (_projet is null || _phases is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_phaseActive is null)
+{
+    <MudAlert Severity="Severity.Warning">Phase introuvable.</MudAlert>
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudChip T="string" Color="Color.Primary" Size="Size.Small">
+            Phase @_phaseActive.Numero — @_phaseActive.Nom
+        </MudChip>
+        @if (_questions is not null)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @(_indexQuestionActive + 1) / @_questions.Count
+            </MudText>
+        }
+    </MudStack>
+
+    @if (_questions is not null)
+    {
+        <MudProgressLinear Value="@ProgressionPourcent" Color="Color.Primary" Class="mb-6" />
+
+        <EntretienQuestionGuidee ProjetId="@ProjetId" PhaseId="@_phaseActive.Id"
+                                  Question="@_questions[_indexQuestionActive]"
+                                  ReponseExistante="@_informationExistante"
+                                  SurValidation="@AllerQuestionSuivanteAsync" />
+
+        <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-6">
+            <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Disabled="@(_indexQuestionActive == 0)"
+                       OnClick="@AllerQuestionPrecedenteAsync" Style="min-height:44px">
+                Question précédente
+            </MudButton>
+            <MudButton EndIcon="@Icons.Material.Filled.SkipNext" OnClick="@(() => AllerQuestionSuivanteAsync())" Style="min-height:44px">
+                Passer cette question
+            </MudButton>
+        </MudStack>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Cette phase n'a pas de questions guidées prédéfinies (au-delà du Bloc A, seules les
+            Phases 01 et 02 en ont — Guide des 18 phases). Utilisez la vue détaillée de la phase
+            pour saisir les informations, questions, risques et décisions.
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@(() => Navigation.NavigateTo($"/projets/{ProjetId}/phases/{_phaseActive.Numero}"))">
+            Ouvrir la vue détaillée de cette phase
+        </MudButton>
+    }
+
+    <MudDivider Class="my-6" />
+
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Navigation rapide entre phases</MudText>
+    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1">
+        @foreach (var phase in _phases)
+        {
+            <MudChip T="string" Size="Size.Small"
+                     Color="@(phase.Numero == _phaseActive.Numero ? Color.Primary : Color.Default)"
+                     OnClick="@(() => AllerVersPhaseAsync(phase.Numero))">
+                @phase.Numero
+            </MudChip>
+        }
+    </MudStack>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int? NumeroPhase { get; set; }
+
+    private ProjetDto? _projet;
+    private IReadOnlyList<PhaseDto>? _phases;
+    private PhaseDto? _phaseActive;
+    private IReadOnlyList<Shared.ModeEntretien.QuestionGuidee>? _questions;
+    private int _indexQuestionActive;
+    private InformationRegistreDto? _informationExistante;
+
+    private double ProgressionPourcent =>
+        _questions is { Count: > 0 } ? (_indexQuestionActive + 1) * 100.0 / _questions.Count : 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _projet = await ProjetsApi.GetParIdAsync(ProjetId);
+        _phases = await PhasesApi.GetToutesAsync(ProjetId);
+
+        var numeroCible = NumeroPhase ?? _phases.FirstOrDefault(p => p.Statut != StatutPhase.Terminee)?.Numero ?? 1;
+        _phaseActive = _phases.FirstOrDefault(p => p.Numero == numeroCible);
+        _questions = _phaseActive is null ? null : Shared.ModeEntretien.QuestionsGuideesParPhase.PourPhase(_phaseActive.Numero);
+        _indexQuestionActive = 0;
+
+        await ChargerReponseExistanteAsync();
+    }
+
+    private async Task ChargerReponseExistanteAsync()
+    {
+        if (_questions is null || _phaseActive is null)
+        {
+            _informationExistante = null;
+            return;
+        }
+
+        var libelle = _questions[_indexQuestionActive].Libelle;
+        var informationsPhase = await RegistresApi.GetInformationsAsync(ProjetId, _phaseActive.Id);
+        _informationExistante = informationsPhase.FirstOrDefault(i => i.Libelle == libelle);
+    }
+
+    private async Task AllerQuestionSuivanteAsync()
+    {
+        if (_questions is null)
+        {
+            return;
+        }
+
+        if (_indexQuestionActive < _questions.Count - 1)
+        {
+            _indexQuestionActive++;
+            await ChargerReponseExistanteAsync();
+        }
+        else
+        {
+            Snackbar.Add("Dernière question de la phase. Passez à la phase suivante depuis la navigation rapide.", Severity.Info);
+        }
+    }
+
+    private async Task AllerQuestionPrecedenteAsync()
+    {
+        if (_indexQuestionActive > 0)
+        {
+            _indexQuestionActive--;
+            await ChargerReponseExistanteAsync();
+        }
+    }
+
+    private Task AllerVersPhaseAsync(int numero)
+    {
+        Navigation.NavigateTo($"/projets/{ProjetId}/entretien/{numero}");
+        return Task.CompletedTask;
+    }
+}

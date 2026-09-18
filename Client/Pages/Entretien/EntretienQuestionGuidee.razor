@@ -1,0 +1,92 @@
+@inject RegistresApiClient RegistresApi
+@inject ISnackbar Snackbar
+
+@* Interface épurée, un seul thème de question à la fois (Prompt Maître section 3) : pas de
+   drawer, pas de tableau, juste la question et la réponse pour ne pas distraire pendant que
+   le client parle. *@
+<MudPaper Class="pa-6" Elevation="2">
+    <MudText Typo="Typo.h5" Class="mb-1">@Question.Libelle</MudText>
+    @if (!string.IsNullOrWhiteSpace(Question.Aide))
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@Question.Aide</MudText>
+    }
+
+    <MudForm @ref="_form">
+        <MudTextField T="string" @bind-Value="_valeur" Label="Réponse" Lines="@(Question.EstMultiligne ? 3 : 1)"
+                      AutoFocus="true" Class="mb-4" Style="min-height:44px" />
+
+        <MudSelect T="SourceInformation" @bind-Value="_source" Label="Source" Class="mb-4">
+            <MudSelectItem Value="SourceInformation.Declaratif">Déclaratif (dit par le client)</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.Observation">Observation vérifiée</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.Document">Document fourni</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.SystemeExistant">Système/outil existant</MudSelectItem>
+        </MudSelect>
+    </MudForm>
+
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" FullWidth="true"
+                   Disabled="@_enCours" OnClick="@(() => ValiderAsync(StatutInformation.Valide))"
+                   Style="min-height:44px">
+            Validé
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Large"
+                   Disabled="@_enCours" OnClick="@(() => ValiderAsync(StatutInformation.AConfirmer))"
+                   Style="min-height:44px">
+            À confirmer
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public int ProjetId { get; set; }
+    [Parameter, EditorRequired] public int PhaseId { get; set; }
+    [Parameter, EditorRequired] public Shared.ModeEntretien.QuestionGuidee Question { get; set; } = null!;
+    [Parameter] public InformationRegistreDto? ReponseExistante { get; set; }
+    [Parameter] public EventCallback SurValidation { get; set; }
+
+    private MudForm? _form;
+    private string _valeur = string.Empty;
+    private SourceInformation _source;
+    private bool _enCours;
+    private int? _derniereQuestionChargee;
+
+    protected override void OnParametersSet()
+    {
+        // Ne réinitialise le formulaire que lorsque la question change réellement (pas à chaque
+        // re-render), pour ne pas effacer une saisie en cours si le parent se re-render.
+        if (_derniereQuestionChargee == Question.Numero && ReponseExistante is null)
+        {
+            return;
+        }
+
+        _derniereQuestionChargee = Question.Numero;
+        _valeur = ReponseExistante?.Valeur ?? string.Empty;
+        _source = ReponseExistante?.Source ?? Question.SourceParDefaut;
+    }
+
+    private async Task ValiderAsync(StatutInformation statut)
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertInformationRegistreDto(PhaseId, Question.Libelle, _valeur, _source, statut);
+
+        var succes = ReponseExistante is null
+            ? await RegistresApi.CreerInformationAsync(ProjetId, dto) is not null
+            : await RegistresApi.ModifierInformationAsync(ProjetId, ReponseExistante.Id, dto);
+
+        _enCours = false;
+
+        if (succes)
+        {
+            await SurValidation.InvokeAsync();
+        }
+        else
+        {
+            Snackbar.Add("Impossible d'enregistrer la réponse.", Severity.Error);
+        }
+    }
+}
