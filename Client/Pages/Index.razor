@@ -1,10 +1,109 @@
 @page "/"
 @attribute [Authorize]
+@inject DashboardApiClient DashboardApi
+@inject NavigationManager Navigation
 
 <PageTitle>Tableau de bord</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-4">Tableau de bord</MudText>
-<MudText Typo="Typo.body1">
-    Connexion réussie. Le tableau de bord multi-projets sera construit à la dernière étape du
-    développement (section 10 du Prompt Maître).
-</MudText>
+
+@if (_dashboard is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_dashboard.Projets.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        Aucun projet pour l'instant. Créez le premier depuis la page <MudLink Href="/projets">Projets</MudLink>.
+    </MudAlert>
+}
+else
+{
+    <MudGrid Class="mb-6">
+        @foreach (var projet in _dashboard.Projets)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="pa-4" Elevation="1" Style="cursor:pointer;height:100%"
+                          @onclick="@(() => Navigation.NavigateTo($"/projets/{projet.Id}/domaine"))">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-2">
+                        <div>
+                            <MudText Typo="Typo.h6">@projet.Nom</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@projet.ClientNom</MudText>
+                        </div>
+                        @if (projet.NombreQuestionsBloquantesOuvertes > 0)
+                        {
+                            <MudTooltip Text="Questions bloquantes ouvertes">
+                                <MudBadge Content="@projet.NombreQuestionsBloquantesOuvertes" Color="Color.Error" Overlap="true">
+                                    <MudIcon Icon="@Icons.Material.Filled.ReportProblem" Color="Color.Error" />
+                                </MudBadge>
+                            </MudTooltip>
+                        }
+                    </MudStack>
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Maturité — @LibelleMaturite(projet.NiveauMaturite)</MudText>
+                    <MudProgressLinear Color="@CouleurMaturite(projet.NiveauMaturite)" Value="@((int)projet.NiveauMaturite * 20)"
+                                        Class="my-1" Rounded="true" Size="Size.Medium" />
+
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-3">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@projet.Statut</MudChip>
+                        <MudText Typo="Typo.caption">@projet.NombrePhasesTerminees / 18 phases terminées</MudText>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudText Typo="Typo.h5" Class="mb-2">Questions bloquantes — tous projets</MudText>
+    @if (_dashboard.QuestionsBloquantes.Count == 0)
+    {
+        <MudAlert Severity="Severity.Success">Aucune question bloquante ouverte.</MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="1">
+            <MudList T="string">
+                @foreach (var question in _dashboard.QuestionsBloquantes)
+                {
+                    <MudListItem T="string" OnClick="@(() => Navigation.NavigateTo($"/projets/{question.ProjetId}/domaine"))">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body1">@question.Question</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@question.Code — @question.ProjetNom</MudText>
+                            </MudStack>
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary" />
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    }
+}
+
+@code {
+    private DashboardDto? _dashboard;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dashboard = await DashboardApi.GetAsync();
+    }
+
+    private static string LibelleMaturite(NiveauMaturite niveau) => niveau switch
+    {
+        NiveauMaturite.Niveau0Inconnu => "0 — Inconnu",
+        NiveauMaturite.Niveau1Comprehension => "1 — Compréhension",
+        NiveauMaturite.Niveau2AnalyseMetier => "2 — Analyse métier",
+        NiveauMaturite.Niveau3Specification => "3 — Spécification",
+        NiveauMaturite.Niveau4Conception => "4 — Conception",
+        NiveauMaturite.Niveau5PretPourDev => "5 — Prêt pour dev",
+        _ => niveau.ToString()
+    };
+
+    private static Color CouleurMaturite(NiveauMaturite niveau) => niveau switch
+    {
+        NiveauMaturite.Niveau0Inconnu => Color.Default,
+        NiveauMaturite.Niveau1Comprehension or NiveauMaturite.Niveau2AnalyseMetier => Color.Info,
+        NiveauMaturite.Niveau3Specification or NiveauMaturite.Niveau4Conception => Color.Warning,
+        NiveauMaturite.Niveau5PretPourDev => Color.Success,
+        _ => Color.Default
+    };
+}

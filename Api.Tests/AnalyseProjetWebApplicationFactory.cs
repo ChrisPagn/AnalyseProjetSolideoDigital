@@ -27,6 +27,11 @@ public class AnalyseProjetWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.UseEnvironment("Development");
 
+        // reloadConfigOnChange à false : sans cela, chaque factory de test démarre un
+        // FileSystemWatcher (inotify) sur les appsettings, et la suite complète (des centaines de
+        // factories créées séquentiellement) dépasse vite la limite système fs.inotify.max_user_instances.
+        builder.UseSetting("hostBuilder:reloadConfigOnChange", "false");
+
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>

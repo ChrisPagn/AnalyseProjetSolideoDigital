@@ -660,3 +660,81 @@ Voir `git log` / `git status` — en attente de validation de l'étape par l'uti
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Étape Dashboard — Vue d'ensemble multi-projets (2026-09-18)
+
+### Contenu réalisé
+- Dernière étape du plan de développement (Prompt Maître, section 10) : une vue d'ensemble
+  multi-projets, remplaçant le message statique affiché depuis l'étape 2 sur la page racine `/`.
+  Périmètre validé avec l'utilisateur : cartes projets + jauge de maturité + registre global des
+  questions bloquantes (pas de graphiques additionnels ni de filtres — rester au plus proche du
+  Prompt Maître, qui ne détaille pas plus que ces trois éléments pour cette étape).
+- `Api/Controllers/DashboardController` : `GET api/dashboard`, lecture seule, protégé
+  `[Authorize]`. Agrège des données déjà exposées ailleurs (Projets, QuestionRegistre) — aucune
+  logique métier nouvelle, aucun recalcul : une carte par projet (nom, client, niveau de maturité
+  déjà persisté, statut, nombre de phases terminées, nombre de questions bloquantes ouvertes) triée
+  par nombre de questions bloquantes décroissant puis par nom, plus la liste globale des questions
+  bloquantes ouvertes tous projets confondus.
+- `Shared/Dtos/Dashboard/DashboardDto.cs` : `DashboardDto`, `ProjetResumeDto`, `QuestionBloquanteDto`.
+- Client Blazor (`Client/Pages/Index.razor`, page racine `/`) : `DashboardApiClient` (nouveau
+  service, même pattern que les autres wrappers HttpClient typés) consommé pour afficher une grille
+  de cartes projets (nom, client, badge d'alerte si questions bloquantes ouvertes, barre de
+  progression colorée représentant la maturité 0-5, statut, phases terminées / 18) suivie d'un bloc
+  "Questions bloquantes — tous projets" listant chaque question avec son code et le nom du projet
+  concerné, cliquable vers la page Domaine analysé du projet correspondant.
+- Tests xUnit : `DashboardControllerTests` (5 tests — présence de tous les projets avec leur
+  maturité, comptage des phases terminées, comptage des questions bloquantes ouvertes par projet,
+  registre global incluant les questions bloquantes ouvertes, exclusion des questions bloquantes
+  résolues). 125/125 tests passent au total (120 hérités des étapes 1-10 + 5 nouveaux).
+- Flux vérifié dans un vrai navigateur (Chrome headless + Chrome DevTools Protocol) : connexion
+  réelle via le formulaire, création d'un client/projet/question bloquante de test via l'API,
+  rechargement du tableau de bord confirmant l'affichage correct de la nouvelle carte projet (badge
+  d'alerte, jauge de maturité, phases terminées) et de la question bloquante dans le registre
+  global — aucune erreur console. Données de test supprimées après vérification (statut 204).
+
+### Bug résolu — suite de tests instable après ajout du Dashboard
+- En ajoutant `DashboardControllerTests`, l'exécution de la suite **complète** (`dotnet test`)
+  s'est mise à échouer sur 9 tests de `DomaineControllerTests`, systématiquement lors de la
+  création du host de test (`CreateAuthenticatedClientAsync` → `WebApplicationFactory`), alors que
+  ces mêmes tests passaient à 100% une fois isolés (`--filter`). Diagnostic : le message d'erreur
+  réel (tronqué dans le résumé xUnit par défaut) était `System.IO.IOException: The configured user
+  limit (128) on the number of inotify instances has been reached`. Chaque
+  `WebApplicationFactory` démarre un host en environnement "Development", qui active par défaut le
+  rechargement à chaud de la configuration (`FileSystemWatcher` sur les `appsettings.*.json`,
+  consommant une instance `inotify` par host). La suite complète crée des dizaines de factories
+  l'une après l'autre ; la limite système Linux par défaut (128 instances par utilisateur) finit
+  par être atteinte avant la fin de la suite. Ce n'était pas une régression liée au code du
+  Dashboard : la suite était simplement passée, avec l'ajout de ces 5 tests, au-dessus du seuil qui
+  déclenchait le symptôme.
+  - Fix retenu : `Api.Tests/AnalyseProjetWebApplicationFactory.cs` désactive explicitement le
+    rechargement de configuration à chaud pour les hosts de test
+    (`builder.UseSetting("hostBuilder:reloadConfigOnChange", "false")`), ce qui supprime la
+    création du `FileSystemWatcher` — donc la consommation d'instances `inotify` — sans toucher à
+    `Program.cs` ni à la configuration d'environnement réelle. Solution portable (pas de dépendance
+    à une limite système modifiée manuellement sur chaque machine ou en CI), contrairement à
+    l'alternative écartée (augmenter `fs.inotify.max_user_instances`).
+  - Un essai intermédiaire (désactiver la parallélisation des classes de test via
+    `xunit.runner.json`) n'a pas résolu le problème (le vrai goulot était le nombre total de hosts
+    créés, pas leur concurrence) — retiré après l'avoir confirmé inefficace, pour ne garder que le
+    changement réellement nécessaire.
+  - Suite complète confirmée stable après correction : 125/125, exécutée deux fois de suite.
+
+### Décisions d'architecture prises
+- Cartes projets + jauge de maturité + registre global des questions bloquantes : périmètre validé
+  avec l'utilisateur avant de coder, sans étendre au-delà (pas de graphiques de tendance, pas de
+  filtres avancés — hors périmètre du Prompt Maître pour cette étape).
+- `DashboardController` reste strictement en lecture : aucun recalcul de maturité ni d'aucune autre
+  donnée déclenché depuis cette vue — il ne fait que lire les valeurs déjà persistées par les
+  services dédiés (`MaturiteCalculatorService` etc.), cohérent avec l'interdiction de logique
+  métier dans les Controllers (Prompt Maître section 14).
+
+### Problèmes connus / points ouverts
+- Aucun bug fonctionnel détecté sur le Dashboard lui-même après résolution du problème
+  d'environnement de test ci-dessus.
+- Les points des étapes 1-10 (noms de phases 5-18 provisoires, seuils `NiveauParPhases` des Blocs
+  B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables.
+- **Le plan de développement du Prompt Maître (section 10, étapes 1 à 10 + Dashboard) est
+  maintenant complet.**
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
