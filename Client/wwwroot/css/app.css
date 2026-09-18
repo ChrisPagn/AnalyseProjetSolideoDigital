@@ -86,3 +86,22 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Logo Solideo Digital (navbar + footer) : léger effet au survol pour signaler qu'il ramène
+   à l'accueil, sans distraire le reste de l'interface. */
+.logo-sd-link {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+}
+
+.logo-sd {
+    height: 32px;
+    width: auto;
+    transition: transform 0.3s ease-in-out;
+}
+
+.logo-sd-link:hover .logo-sd,
+.logo-sd-link:focus-visible .logo-sd {
+    transform: rotate(-8deg) scale(1.08);
+}

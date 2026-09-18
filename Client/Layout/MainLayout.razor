@@ -13,7 +13,9 @@
         <MudLayout>
             <MudAppBar Elevation="1">
                 <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@BasculerDrawer" />
-                <img src="images/logo-mark-sd.png" alt="Solideo Digital" style="height:32px;width:auto;margin-left:8px" />
+                <a href="/" class="logo-sd-link" style="margin-left:8px" title="Retour au tableau de bord">
+                    <img src="images/logo-mark-sd.png" alt="Solideo Digital" class="logo-sd" />
+                </a>
                 <MudText Typo="Typo.h6" Class="ml-2">AnalyseProjetSolideoDigital</MudText>
                 <MudSpacer />
                 <MudText Typo="Typo.body2" Class="mr-4 d-none d-sm-flex">@context.User.Identity?.Name</MudText>
@@ -26,8 +28,8 @@
                     <MudNavLink Href="projets" Icon="@Icons.Material.Filled.Folder">Projets</MudNavLink>
                 </MudNavMenu>
             </MudDrawer>
-            <MudMainContent>
-                <MudContainer MaxWidth="MaxWidth.Large" Class="my-4 pt-4">
+            <MudMainContent Style="display:flex;flex-direction:column;min-height:100vh">
+                <MudContainer MaxWidth="MaxWidth.Large" Class="my-4 pt-4" Style="flex:1 0 auto">
                     @Body
                 </MudContainer>
                 <Footer />
