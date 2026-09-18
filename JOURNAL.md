@@ -203,3 +203,51 @@ Voir `git log` / `git status` — en attente de validation de l'étape par l'uti
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Étape 4 — Phases & navigation (2026-09-18)
+
+### Contenu réalisé
+- Décision validée avec l'utilisateur : navigation libre (non bloquante) entre les 18 phases —
+  l'utilisateur peut cliquer directement sur n'importe quelle phase à tout moment, cohérent avec
+  l'usage réel en RDV (Guide 18 phases : une info détectée en Phase 03 doit pouvoir alimenter la
+  Phase 10 immédiatement). Périmètre de l'étape limité à la navigation/statuts — le contenu métier
+  de chaque phase (questions, informations à saisir) arrive aux étapes 5 (Registres) et 6 (Domaine
+  projet analysé), comme prévu par l'ordre des modules (section 10).
+- `Shared/Dtos/Phases` : `PhaseDto`, `UpdateStatutPhaseDto`.
+- `Api/Actions/UpdateStatutPhaseAction` : changement de statut d'une Phase dans une transaction EF
+  Core explicite (section 5.4) qui recalcule et persiste `NiveauMaturite` dans la foulée.
+- `Api/Controllers/PhasesController` (`[Authorize]`, routes imbriquées sous `/api/projets/{projetId}/phases`) :
+  liste des 18 phases d'un projet, détail par numéro, modification de statut (retourne le
+  `ProjetDto` à jour pour rafraîchir l'affichage de la maturité sans requête supplémentaire).
+- Client Blazor : `PhasesApiClient` (wrapper HttpClient typé), page
+  `Client/Pages/Phases/PhasesProjet.razor` (route `/projets/{ProjetId}/phases/{Numero?}`) — liste
+  des 18 phases avec icône de statut, panneau de détail avec boutons Non commencée/En cours/Terminée,
+  navigation Phase précédente/suivante, affichage du niveau de maturité du projet mis à jour en
+  direct après chaque changement de statut. Bouton d'accès depuis la page Projets.
+- Tests xUnit (`PhasesControllerTests`) : les 18 phases sont créées dans le bon ordre, phase
+  introuvable → 404, et surtout l'impact réel du changement de statut sur `NiveauMaturite`
+  (Phases 01-02 terminées → Niveau 1 ; repasser une phase à Non commencée fait redescendre le
+  niveau). 41/41 tests passent au total (35 hérités des étapes 1-3 + 6 nouveaux).
+- Flux vérifié dans un vrai navigateur : navigation entre phases, changement de statut avec
+  confirmation visuelle (snackbar + icônes + chip de maturité mis à jour en direct dans l'en-tête).
+
+### Décisions d'architecture prises
+- Navigation séquentielle non bloquante — décision validée avec l'utilisateur (voir ci-dessus).
+- Route `/projets/{ProjetId}/phases/{Numero?}` avec `Numero` optionnel : à l'arrivée sans numéro,
+  la page sélectionne automatiquement la première phase non terminée (comportement utile pour
+  reprendre une analyse là où elle s'était arrêtée), plutôt que de forcer un choix explicite.
+
+### Problèmes connus / points ouverts
+- **Bug réel détecté et corrigé** : dans `UpdateStatutPhaseAction`, le nouveau statut de la Phase
+  était assigné en mémoire (trackée par EF Core) mais `MaturiteCalculatorService.CalculerAsync`
+  relit les Phases via une requête SQL directe (`db.Phases.Where(...).ToListAsync`), qui ne voyait
+  donc pas encore le changement non persisté — le niveau de maturité calculé restait basé sur
+  l'ancien statut. Corrigé en forçant un `SaveChangesAsync()` du changement de statut avant
+  d'appeler le calculateur, dans la même transaction. Détecté immédiatement par les tests
+  d'intégration (`ModifierStatut_phases_01_02_terminees_fait_passer_le_projet_au_niveau_1` échouait
+  avant correction) — aucun risque que ce bug ait atteint un usage réel.
+- Les points des étapes 1-3 (noms de phases 5-18 provisoires, seuils `NiveauParPhases` des Blocs
+  B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.

@@ -1,0 +1,187 @@
+@page "/projets/{ProjetId:int}/phases/{Numero:int?}"
+@attribute [Authorize]
+@inject PhasesApiClient PhasesApi
+@inject ProjetsApiClient ProjetsApi
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Phases — @(_projet?.Nom ?? "Chargement...")</PageTitle>
+
+@if (_phases is null || _projet is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <div>
+            <MudText Typo="Typo.h4">@_projet.Nom</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@_projet.ClientNom</MudText>
+        </div>
+        <MudChip T="string" Color="@CouleurMaturite(_projet.NiveauMaturite)">
+            @LibelleMaturite(_projet.NiveauMaturite)
+        </MudChip>
+    </MudStack>
+
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-2" Elevation="1">
+                <MudList T="int" Dense="true" SelectedValue="@(_phaseActive?.Numero ?? 0)">
+                    @foreach (var phase in _phases)
+                    {
+                        <MudListItem T="int" Value="@phase.Numero" OnClick="@(() => AllerVersAsync(phase.Numero))">
+                            <div class="d-flex align-center justify-space-between" style="width:100%">
+                                <span>@phase.Numero. @phase.Nom</span>
+                                <MudIcon Icon="@IconeStatut(phase.Statut)" Color="@CouleurStatut(phase.Statut)" Size="Size.Small" />
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            @if (_phaseActive is null)
+            {
+                <MudAlert Severity="Severity.Info">Sélectionnez une phase dans la liste.</MudAlert>
+            }
+            else
+            {
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudText Typo="Typo.h5">Phase @_phaseActive.Numero — @_phaseActive.Nom</MudText>
+                        <MudChip T="string" Color="@CouleurStatut(_phaseActive.Statut)">@LibelleStatut(_phaseActive.Statut)</MudChip>
+                    </MudStack>
+
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                        Dernière mise à jour : @_phaseActive.DateMaj.ToLocalTime().ToString("g")
+                    </MudText>
+
+                    <MudText Typo="Typo.body1" Class="mb-4">
+                        Le contenu détaillé de cette phase (questions, informations à saisir) sera construit
+                        aux étapes suivantes du développement (Registres et Domaine projet analysé).
+                    </MudText>
+
+                    <MudStack Row="true" Spacing="2" Class="mb-4">
+                        <MudButton Variant="@(_phaseActive.Statut == Shared.Enums.StatutPhase.NonCommencee ? Variant.Filled : Variant.Outlined)"
+                                   Color="Color.Default" Size="Size.Small"
+                                   OnClick="@(() => ChangerStatutAsync(Shared.Enums.StatutPhase.NonCommencee))">
+                            Non commencée
+                        </MudButton>
+                        <MudButton Variant="@(_phaseActive.Statut == Shared.Enums.StatutPhase.EnCours ? Variant.Filled : Variant.Outlined)"
+                                   Color="Color.Info" Size="Size.Small"
+                                   OnClick="@(() => ChangerStatutAsync(Shared.Enums.StatutPhase.EnCours))">
+                            En cours
+                        </MudButton>
+                        <MudButton Variant="@(_phaseActive.Statut == Shared.Enums.StatutPhase.Terminee ? Variant.Filled : Variant.Outlined)"
+                                   Color="Color.Success" Size="Size.Small"
+                                   OnClick="@(() => ChangerStatutAsync(Shared.Enums.StatutPhase.Terminee))">
+                            Terminée
+                        </MudButton>
+                    </MudStack>
+
+                    <MudDivider Class="mb-4" />
+
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Disabled="@(_phaseActive.Numero <= 1)"
+                                   OnClick="@(() => AllerVersAsync(_phaseActive.Numero - 1))">
+                            Phase précédente
+                        </MudButton>
+                        <MudButton EndIcon="@Icons.Material.Filled.ArrowForward" Disabled="@(_phaseActive.Numero >= 18)"
+                                   OnClick="@(() => AllerVersAsync(_phaseActive.Numero + 1))">
+                            Phase suivante
+                        </MudButton>
+                    </MudStack>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int? Numero { get; set; }
+
+    private IReadOnlyList<PhaseDto>? _phases;
+    private ProjetDto? _projet;
+    private PhaseDto? _phaseActive;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _projet = await ProjetsApi.GetParIdAsync(ProjetId);
+        _phases = await PhasesApi.GetToutesAsync(ProjetId);
+
+        var numeroCible = Numero ?? _phases.FirstOrDefault(p => p.Statut != Shared.Enums.StatutPhase.Terminee)?.Numero ?? 1;
+        _phaseActive = _phases.FirstOrDefault(p => p.Numero == numeroCible) ?? _phases.FirstOrDefault();
+    }
+
+    private Task AllerVersAsync(int numero)
+    {
+        Navigation.NavigateTo($"/projets/{ProjetId}/phases/{numero}");
+        return Task.CompletedTask;
+    }
+
+    private async Task ChangerStatutAsync(Shared.Enums.StatutPhase statut)
+    {
+        if (_phaseActive is null)
+        {
+            return;
+        }
+
+        var (succes, projetMisAJour) = await PhasesApi.ModifierStatutAsync(ProjetId, _phaseActive.Id, statut);
+        if (!succes)
+        {
+            Snackbar.Add("Impossible de modifier le statut de la phase.", Severity.Error);
+            return;
+        }
+
+        _projet = projetMisAJour;
+        _phases = await PhasesApi.GetToutesAsync(ProjetId);
+        _phaseActive = _phases.FirstOrDefault(p => p.Numero == _phaseActive.Numero);
+        Snackbar.Add("Statut mis à jour.", Severity.Success);
+    }
+
+    private static string LibelleStatut(Shared.Enums.StatutPhase statut) => statut switch
+    {
+        Shared.Enums.StatutPhase.NonCommencee => "Non commencée",
+        Shared.Enums.StatutPhase.EnCours => "En cours",
+        Shared.Enums.StatutPhase.Terminee => "Terminée",
+        _ => statut.ToString()
+    };
+
+    private static Color CouleurStatut(Shared.Enums.StatutPhase statut) => statut switch
+    {
+        Shared.Enums.StatutPhase.NonCommencee => Color.Default,
+        Shared.Enums.StatutPhase.EnCours => Color.Info,
+        Shared.Enums.StatutPhase.Terminee => Color.Success,
+        _ => Color.Default
+    };
+
+    private static string IconeStatut(Shared.Enums.StatutPhase statut) => statut switch
+    {
+        Shared.Enums.StatutPhase.NonCommencee => Icons.Material.Filled.RadioButtonUnchecked,
+        Shared.Enums.StatutPhase.EnCours => Icons.Material.Filled.PendingActions,
+        Shared.Enums.StatutPhase.Terminee => Icons.Material.Filled.CheckCircle,
+        _ => Icons.Material.Filled.RadioButtonUnchecked
+    };
+
+    private static string LibelleMaturite(NiveauMaturite niveau) => niveau switch
+    {
+        NiveauMaturite.Niveau0Inconnu => "0 — Inconnu",
+        NiveauMaturite.Niveau1Comprehension => "1 — Compréhension",
+        NiveauMaturite.Niveau2AnalyseMetier => "2 — Analyse métier",
+        NiveauMaturite.Niveau3Specification => "3 — Spécification",
+        NiveauMaturite.Niveau4Conception => "4 — Conception",
+        NiveauMaturite.Niveau5PretPourDev => "5 — Prêt pour dev",
+        _ => niveau.ToString()
+    };
+
+    private static Color CouleurMaturite(NiveauMaturite niveau) => niveau switch
+    {
+        NiveauMaturite.Niveau0Inconnu => Color.Default,
+        NiveauMaturite.Niveau1Comprehension or NiveauMaturite.Niveau2AnalyseMetier => Color.Info,
+        NiveauMaturite.Niveau3Specification or NiveauMaturite.Niveau4Conception => Color.Warning,
+        NiveauMaturite.Niveau5PretPourDev => Color.Success,
+        _ => Color.Default
+    };
+}

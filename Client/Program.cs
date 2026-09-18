@@ -24,6 +24,7 @@ builder.Services.AddMudServices();
 builder.Services.AddScoped<AuthClient>();
 builder.Services.AddScoped<ClientsApiClient>();
 builder.Services.AddScoped<ProjetsApiClient>();
+builder.Services.AddScoped<PhasesApiClient>();
 builder.Services.AddScoped<CookieAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<CookieAuthenticationStateProvider>());
 builder.Services.AddAuthorizationCore();
