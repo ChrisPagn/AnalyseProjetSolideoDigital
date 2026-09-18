@@ -1,0 +1,127 @@
+@page "/projets"
+@attribute [Authorize]
+@inject ProjetsApiClient ProjetsApi
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Projets</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Projets</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => OuvrirDialogAsync())">
+        Nouveau projet
+    </MudButton>
+</MudStack>
+
+@if (_projets is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_projets.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Aucun projet pour l'instant. Créez le premier avec le bouton ci-dessus.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_projets" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Nom</MudTh>
+            <MudTh>Client</MudTh>
+            <MudTh>Maturité</MudTh>
+            <MudTh>Stack</MudTh>
+            <MudTh>Statut</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Nom">@context.Nom</MudTd>
+            <MudTd DataLabel="Client">@context.ClientNom</MudTd>
+            <MudTd DataLabel="Maturité">
+                <MudChip T="string" Size="Size.Small" Color="@CouleurMaturite(context.NiveauMaturite)">
+                    @LibelleMaturite(context.NiveauMaturite)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Stack">@context.StackEnvisagee</MudTd>
+            <MudTd DataLabel="Statut">@context.Statut</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<ProjetDto>? _projets;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _projets = await ProjetsApi.GetTousAsync();
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var dialog = await DialogService.ShowAsync<ProjetFormDialog>("Nouveau projet");
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(ProjetDto projet)
+    {
+        var parametres = new DialogParameters<MudMessageBox>
+        {
+            { x => x.Title, "Confirmer la suppression" },
+            { x => x.Message, $"Supprimer le projet « {projet.Nom} » ? Cette action est irréversible." },
+            { x => x.YesText, "Supprimer" },
+            { x => x.CancelText, "Annuler" }
+        };
+        var dialog = await DialogService.ShowAsync<MudMessageBox>("Confirmer la suppression", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is null || resultat.Canceled)
+        {
+            return;
+        }
+
+        var succes = await ProjetsApi.SupprimerAsync(projet.Id);
+        if (succes)
+        {
+            Snackbar.Add("Projet supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+
+    private static string LibelleMaturite(NiveauMaturite niveau) => niveau switch
+    {
+        NiveauMaturite.Niveau0Inconnu => "0 — Inconnu",
+        NiveauMaturite.Niveau1Comprehension => "1 — Compréhension",
+        NiveauMaturite.Niveau2AnalyseMetier => "2 — Analyse métier",
+        NiveauMaturite.Niveau3Specification => "3 — Spécification",
+        NiveauMaturite.Niveau4Conception => "4 — Conception",
+        NiveauMaturite.Niveau5PretPourDev => "5 — Prêt pour dev",
+        _ => niveau.ToString()
+    };
+
+    private static Color CouleurMaturite(NiveauMaturite niveau) => niveau switch
+    {
+        NiveauMaturite.Niveau0Inconnu => Color.Default,
+        NiveauMaturite.Niveau1Comprehension or NiveauMaturite.Niveau2AnalyseMetier => Color.Info,
+        NiveauMaturite.Niveau3Specification or NiveauMaturite.Niveau4Conception => Color.Warning,
+        NiveauMaturite.Niveau5PretPourDev => Color.Success,
+        _ => Color.Default
+    };
+}

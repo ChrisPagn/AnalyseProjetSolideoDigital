@@ -1,0 +1,106 @@
+@page "/clients"
+@attribute [Authorize]
+@inject ClientsApiClient ClientsApi
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Clients</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Clients</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => OuvrirDialogAsync(null))">
+        Nouveau client
+    </MudButton>
+</MudStack>
+
+@if (_clients is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_clients.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Aucun client pour l'instant. Créez le premier avec le bouton ci-dessus.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_clients" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Nom</MudTh>
+            <MudTh>Secteur</MudTh>
+            <MudTh>Taille</MudTh>
+            <MudTh>Contact</MudTh>
+            <MudTh>Projets</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Nom">@context.Nom</MudTd>
+            <MudTd DataLabel="Secteur">@context.Secteur</MudTd>
+            <MudTd DataLabel="Taille">@context.Taille</MudTd>
+            <MudTd DataLabel="Contact">@context.Contact</MudTd>
+            <MudTd DataLabel="Projets">@context.NombreProjets</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => OuvrirDialogAsync(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<ClientDto>? _clients;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _clients = await ClientsApi.GetTousAsync();
+    }
+
+    private async Task OuvrirDialogAsync(ClientDto? client)
+    {
+        var parametres = new DialogParameters<ClientFormDialog> { { x => x.Client, client } };
+        var dialog = await DialogService.ShowAsync<ClientFormDialog>(
+            client is null ? "Nouveau client" : "Modifier le client", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(ClientDto client)
+    {
+        var parametres = new DialogParameters<MudMessageBox>
+        {
+            { x => x.Title, "Confirmer la suppression" },
+            { x => x.Message, $"Supprimer le client « {client.Nom} » ? Cette action est irréversible." },
+            { x => x.YesText, "Supprimer" },
+            { x => x.CancelText, "Annuler" }
+        };
+        var dialog = await DialogService.ShowAsync<MudMessageBox>("Confirmer la suppression", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is null || resultat.Canceled)
+        {
+            return;
+        }
+
+        var (succes, erreur) = await ClientsApi.SupprimerAsync(client.Id);
+        if (succes)
+        {
+            Snackbar.Add("Client supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add(erreur ?? "Suppression impossible.", Severity.Error);
+        }
+    }
+}

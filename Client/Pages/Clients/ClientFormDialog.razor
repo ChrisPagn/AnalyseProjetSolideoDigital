@@ -1,0 +1,78 @@
+@inject ClientsApiClient ClientsApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Nom" @bind-Value="_nom" Required="true"
+                          RequiredError="Le nom est requis." Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Secteur" @bind-Value="_secteur" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Taille" @bind-Value="_taille" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Contact" @bind-Value="_contact" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Adresse" @bind-Value="_adresse" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Notes" @bind-Value="_notes" Lines="3" Class="mb-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ClientDto? Client { get; set; }
+
+    private MudForm? _form;
+    private string _nom = string.Empty;
+    private string? _secteur;
+    private string? _taille;
+    private string? _contact;
+    private string? _adresse;
+    private string? _notes;
+    private bool _enCours;
+
+    protected override void OnInitialized()
+    {
+        if (Client is not null)
+        {
+            _nom = Client.Nom;
+            _secteur = Client.Secteur;
+            _taille = Client.Taille;
+            _contact = Client.Contact;
+            _adresse = Client.Adresse;
+            _notes = Client.Notes;
+        }
+    }
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertClientDto(_nom, _secteur, _taille, _contact, _adresse, _notes);
+
+        var succes = Client is null
+            ? await ClientsApi.CreerAsync(dto) is not null
+            : await ClientsApi.ModifierAsync(Client.Id, dto);
+
+        _enCours = false;
+
+        if (succes)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

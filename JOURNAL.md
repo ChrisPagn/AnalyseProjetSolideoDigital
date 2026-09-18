@@ -142,3 +142,64 @@ attente de validation de l'étape par l'utilisateur avant commit, conformément 
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Étape 3 — Clients & Projets (2026-09-18)
+
+### Contenu réalisé
+- `Shared/Dtos/Clients` : `ClientDto`, `UpsertClientDto`. `Shared/Dtos/Projets` : `ProjetDto`
+  (inclut `NiveauMaturite` en lecture seule), `UpsertProjetDto` (aucun champ `NiveauMaturite` —
+  jamais assignable directement, interdiction absolue section 14).
+- `Api/Validators` : `UpsertClientDtoValidator`, `UpsertProjetDtoValidator` (FluentValidation,
+  section 5.3).
+- `Api/Services/MaturiteCalculatorService` : implémente la formule complète du Prompt Maître 4.3
+  dès cette étape (décision validée avec l'utilisateur, plutôt qu'un stub) —
+  `NiveauMaturite = MIN(NiveauParPhases, NiveauMaxAutorise)`. `NiveauParPhases` couvre le Bloc A
+  figé (paliers 0/1/2) et le cas Niveau 5 (18 phases terminées) ; plafonné à 2 tant que les seuils
+  des Blocs B-E ne sont pas fixés dans le Prompt Maître (point ouvert documenté dans le code).
+  `NiveauMaxAutorise` lit réellement `QuestionRegistre` (bloquante+ouverte → 1),
+  `Fonctionnalite`/`Probleme` sans `LienTracabilite` (→ 4), sinon 5 — toutes ces tables existent
+  depuis l'étape 1, donc le calcul est correct dès maintenant même si aucune UI ne les remplit
+  encore (arrivera aux étapes 5/6/8).
+- `Api/Actions/CreateProjetAction` : création d'un Projet dans une transaction EF Core explicite
+  (section 5.4) — initialise les 18 Phases (`NonCommencee`) puis calcule le niveau de maturité
+  initial (0) avant de committer.
+- `Api/Actions/DeleteClientAction` : refuse la suppression d'un Client ayant des Projets rattachés
+  avec un message métier clair (409 Conflict), plutôt que de laisser remonter l'exception SQL de
+  contrainte de clé étrangère (`DeleteBehavior.Restrict`, posé à l'étape 1).
+- `Api/Controllers/ClientsController` et `ProjetsController` (protégés `[Authorize]`) : CRUD
+  complet + `POST /api/projets/{id}/recalculer-maturite`.
+- Client Blazor : `ClientsApiClient`, `ProjetsApiClient` (wrappers HttpClient typés, section 5.1),
+  pages `Clients.razor`/`Projets.razor` (tables MudBlazor responsive) + dialogs
+  `ClientFormDialog.razor`/`ProjetFormDialog.razor` pour créer/modifier, confirmation de
+  suppression via `MudMessageBox`. Chip coloré affichant le niveau de maturité par projet.
+- Tests xUnit : `MaturiteCalculatorServiceTests` couvre tous les paliers de la formule 4.3 listés
+  en section 12 (0/1/2/5 phases, question bloquante ouverte/résolue, fonctionnalité orpheline,
+  problème non couvert, lien de traçabilité valide) + persistance. `ClientsControllerTests` et
+  `ProjetsControllerTests` : CRUD complet, refus de suppression d'un client avec projet rattaché,
+  refus de création avec client inexistant, DTO invalide → 400. 35/35 tests passent au total
+  (12 hérités des étapes 1-2 + 23 nouveaux).
+- Flux CRUD complet vérifié dans un vrai navigateur (Chrome headless via CDP) : création de client
+  et de projet via les dialogs, rafraîchissement de la liste, affichage correct des chips de
+  maturité pour les projets du seeder (0, 0, 1, 2 selon leur avancement).
+
+### Décisions d'architecture prises
+- `MaturiteCalculatorService` complet dès l'étape 3 plutôt qu'un stub limité au Bloc A — décision
+  validée avec l'utilisateur : le service interroge directement les tables déjà en base, donc le
+  calcul est correct dès maintenant et se remplira naturellement aux étapes suivantes sans qu'il
+  faille revenir modifier ce service à chaque fois.
+- Existence du `ClientId` sur `UpsertProjetDto` vérifiée dans le Controller plutôt que dans le
+  Validator FluentValidation : `AddFluentValidationAutoValidation()` (posé à l'étape 2) utilise le
+  pipeline de validation MVC **synchrone**, qui ne supporte pas les règles asynchrones
+  (`MustAsync`) — une première tentative avec `MustAsync` provoquait une exception
+  `AsyncValidatorInvokedSynchronouslyException` non gérée (500 sur **chaque** création de projet).
+  Détecté par les tests d'intégration avant que ça n'atteigne la production ; corrigé en gardant
+  la validation FluentValidation synchrone (formats, longueurs) et en déplaçant la vérification
+  d'existence du client dans le Controller (`ModelState.AddModelError` + `ValidationProblem`).
+
+### Problèmes connus / points ouverts
+- Aucun nouveau point ouvert. Les points des étapes 1-2 (noms de phases 5-18 provisoires, seuils
+  `NiveauParPhases` des Blocs B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables
+  — `NiveauMaxAutorise`, lui, est désormais pleinement fonctionnel.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.

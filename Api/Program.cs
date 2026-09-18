@@ -76,6 +76,9 @@ builder.Services
     .AddSignInManager();
 
 builder.Services.AddScoped<Api.Services.AuthService>();
+builder.Services.AddScoped<Api.Services.MaturiteCalculatorService>();
+builder.Services.AddScoped<Api.Actions.CreateProjetAction>();
+builder.Services.AddScoped<Api.Actions.DeleteClientAction>();
 
 builder.Services.AddAuthorization();
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)

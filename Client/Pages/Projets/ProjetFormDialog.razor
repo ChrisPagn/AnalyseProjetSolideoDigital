@@ -1,0 +1,93 @@
+@inject ProjetsApiClient ProjetsApi
+@inject ClientsApiClient ClientsApi
+
+<MudDialog>
+    <DialogContent>
+        @if (_clients is null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (_clients.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">
+                Aucun client enregistré. Créez d'abord un client avant de pouvoir créer un projet.
+            </MudAlert>
+        }
+        else
+        {
+            <MudForm @ref="_form">
+                <MudSelect T="int" Label="Client" @bind-Value="_clientId" Required="true"
+                           RequiredError="Le client est requis." Class="mb-3">
+                    @foreach (var client in _clients)
+                    {
+                        <MudSelectItem T="int" Value="@client.Id">@client.Nom</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField T="string" Label="Nom du projet" @bind-Value="_nom" Required="true"
+                              RequiredError="Le nom est requis." Class="mb-3" Style="min-height:44px" />
+                <MudTextField T="string" Label="Stack envisagée" @bind-Value="_stackEnvisagee"
+                              Class="mb-3" Style="min-height:44px" />
+                <MudSelect T="StatutProjet" Label="Statut" @bind-Value="_statut" Class="mb-3">
+                    <MudSelectItem Value="StatutProjet.EnCours">En cours</MudSelectItem>
+                    <MudSelectItem Value="StatutProjet.Suspendu">Suspendu</MudSelectItem>
+                    <MudSelectItem Value="StatutProjet.Termine">Terminé</MudSelectItem>
+                    <MudSelectItem Value="StatutProjet.Archive">Archivé</MudSelectItem>
+                </MudSelect>
+            </MudForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_enCours || _clients is { Count: 0 })"
+                   OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private IReadOnlyList<ClientDto>? _clients;
+    private MudForm? _form;
+    private int _clientId;
+    private string _nom = string.Empty;
+    private string? _stackEnvisagee;
+    private StatutProjet _statut = StatutProjet.EnCours;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _clients = await ClientsApi.GetTousAsync();
+        if (_clients.Count > 0)
+        {
+            _clientId = _clients[0].Id;
+        }
+    }
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertProjetDto(_nom, _clientId, _stackEnvisagee, _statut);
+        var resultat = await ProjetsApi.CreerAsync(dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}
