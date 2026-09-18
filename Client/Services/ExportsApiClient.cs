@@ -1,5 +1,7 @@
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Components.WebAssembly.Http;
 using Microsoft.JSInterop;
+using Shared.Dtos.Domaine;
 
 namespace Client.Services;
 
@@ -28,5 +30,25 @@ public class ExportsApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
 
         await jsRuntime.InvokeVoidAsync("analyseProjetDownload.telechargerFichier", nomFichier, octets);
         return true;
+    }
+
+    public async Task<string?> GenererPromptMaitreAsync(int projetId)
+    {
+        using var requete = new HttpRequestMessage(HttpMethod.Get, $"api/projets/{projetId}/exports/prompt-maitre");
+        requete.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
+
+        var reponse = await httpClient.SendAsync(requete);
+        if (!reponse.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var dto = await reponse.Content.ReadFromJsonAsync<PromptMaitreTransfertDto>();
+        return dto?.Contenu;
+    }
+
+    public async Task CopierDansPressePapierAsync(string texte)
+    {
+        await jsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", texte);
     }
 }

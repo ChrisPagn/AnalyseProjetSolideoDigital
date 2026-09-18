@@ -10,13 +10,14 @@
 }
 else
 {
-    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4" Class="mb-4">
         <div>
             <MudText Typo="Typo.h4">@_projet.Nom</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary">Domaine du projet analysé — @_projet.ClientNom</MudText>
         </div>
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
             <BoutonExportMarkdown ProjetId="@ProjetId" />
+            <BoutonExportPromptMaitre ProjetId="@ProjetId" />
             <MudChip T="string" Color="@CouleurMaturite(_projet.NiveauMaturite)">@LibelleMaturite(_projet.NiveauMaturite)</MudChip>
         </MudStack>
     </MudStack>

@@ -605,3 +605,58 @@ Voir `git log` / `git status` — en attente de validation par l'utilisateur ava
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Étape 10 — Export transfert prompt maître (2026-09-18)
+
+### Contenu réalisé
+- Trois décisions de mapping validées avec l'utilisateur avant de coder (le Prompt Maître décrit
+  l'existence de ce transfert vers les sections 1/2/4/9/10 d'un futur prompt maître de
+  développement, sans détailler la correspondance champ-par-champ) :
+  1. **§1 Contexte** : Demande (InformationRegistre de la question guidée Phase 02, étape 7) +
+     les 3 `Probleme` au `ScoreCalcule` le plus élevé (étape 6) — ancre l'objectif métier à la
+     fois sur la demande du client et sur les problèmes réels quantifiés, dans l'esprit du Guide
+     18 phases ("éviter solution avant besoin").
+  2. **§9 Rôles & permissions** : chaque `Acteur` du domaine analysé devient une ligne "Rôle", ses
+     `Permission` résumées en "Accès" — correspondance directe avec le modèle de l'étape 6.
+  3. **§4 Domaine métier** : `Entite` (Code, Attributs) + `Fonctionnalite` groupées et triées par
+     `PrioriteMoSCoW`. **§10 Modules** : suggestion générée à partir des mêmes `Fonctionnalite`
+     triées par priorité MoSCoW, explicitement étiquetée "proposition, à ajuster" dans le texte
+     généré — l'outil n'a pas connaissance des dépendances techniques réelles entre modules.
+- `Api/Services/PromptMaitreTransfertService` : construit le bloc de texte Markdown complet en
+  mémoire (pas de fichier), une méthode dédiée par section (1/2/4/9/10).
+- `Api/Controllers/ExportsController` étendu : `GET .../exports/prompt-maitre` retourne le contenu
+  en **JSON** (pas en téléchargement de fichier, contrairement à l'export Markdown de l'étape 9) —
+  l'usage prévu par le Prompt Maître est un copier-coller direct dans une nouvelle conversation,
+  pas un enregistrement sur disque.
+- Client Blazor : `PromptMaitreDialog.razor` affiche le texte généré dans une zone de texte en
+  lecture seule (police monospace, scrollable) avec un bouton "Copier" utilisant l'API navigateur
+  `navigator.clipboard.writeText` via interop JS. Composant `BoutonExportPromptMaitre.razor`
+  réutilisable, ajouté à côté du bouton d'export Markdown sur les pages Phase et Domaine analysé.
+- Tests xUnit : `PromptMaitreTransfertServiceTests` (10 tests — présence des 5 sections, reprise
+  de la Demande, limitation à 3 problèmes les mieux priorisés, reprise de la stack envisagée,
+  entités et fonctionnalités listées et triées par priorité, résumé des permissions y compris le
+  raccourci "Tout", mention explicite "proposition" en section 10), `PromptMaitreExportController
+  Tests` (2 tests — réponse JSON, 404 sur projet inexistant). 120/120 tests passent au total
+  (108 hérités des étapes 1-9 + 12 nouveaux).
+- Flux vérifié dans un vrai navigateur avec des données réelles du seeder (projet "Gestion
+  adhésions et dons") : ouverture du dialog, contenu affiché correspondant exactement à la réponse
+  API vérifiée séparément via `curl`, clic sur "Copier" sans erreur (le contenu réel du
+  presse-papier système n'est pas vérifiable depuis un test automatisé en environnement headless
+  sandboxé — limite de l'outil de test, pas du code).
+
+### Décisions d'architecture prises
+- Voir les 3 décisions de mapping validées avec l'utilisateur en tête de section.
+- Retour JSON plutôt que fichier téléchargé pour ce seul export (contrairement à l'export Markdown
+  ZIP de l'étape 9) : cohérent avec l'usage "prêt à coller" explicitement décrit au Prompt Maître
+  4.4, un fichier à ouvrir puis copier aurait ajouté une étape inutile.
+
+### Problèmes connus / points ouverts
+- Aucun bug détecté cette fois.
+- Le contenu généré pour la section 2 (Stack technique) reste minimal (juste le nom de la stack
+  envisagée, texte libre) car l'outil ne modélise pas le détail technique d'une stack cible — reste
+  cohérent avec le Prompt Maître, qui ne prévoit pas non plus de saisie structurée pour cela.
+- Les points des étapes 1-9 (noms de phases 5-18 provisoires, seuils `NiveauParPhases` des Blocs
+  B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.

@@ -1,0 +1,53 @@
+@inject ExportsApiClient ExportsApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_contenu is null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                Bloc prêt à coller dans une nouvelle conversation avec le prompt maître de
+                développement (sections 1, 2, 4, 9, 10 — Prompt Maître 4.4). La section 10 est une
+                proposition à ajuster.
+            </MudAlert>
+            <MudTextField T="string" Value="@_contenu" Lines="20" ReadOnly="true"
+                          Variant="Variant.Outlined" Style="font-family:monospace" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Fermer">Fermer</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_contenu is null)"
+                   StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@CopierAsync">
+            Copier
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+
+    private string? _contenu;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _contenu = await ExportsApi.GenererPromptMaitreAsync(ProjetId) ?? "_Erreur lors de la génération._";
+    }
+
+    private async Task CopierAsync()
+    {
+        if (_contenu is null)
+        {
+            return;
+        }
+
+        await ExportsApi.CopierDansPressePapierAsync(_contenu);
+        Snackbar.Add("Copié dans le presse-papier.", Severity.Success);
+    }
+
+    private void Fermer() => MudDialog.Close();
+}
