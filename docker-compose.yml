@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data # persistance SQLite
+    environment:
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/analyseprojet.db
+      - DatabaseProvider=Sqlite
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:

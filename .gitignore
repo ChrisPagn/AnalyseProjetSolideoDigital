@@ -1,0 +1,21 @@
+## .NET
+bin/
+obj/
+*.user
+
+## Bases de données locales (dev) — jamais commitées
+Api/data/
+*.db
+*.db-shm
+*.db-wal
+
+## Docker / volumes locaux de déploiement
+data/
+
+## IDE
+.vs/
+.vscode/
+*.swp
+
+## LibreOffice
+.~lock.*#
