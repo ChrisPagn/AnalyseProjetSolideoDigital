@@ -492,3 +492,56 @@ Voir `git log` / `git status` — en attente de validation de l'étape par l'uti
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Thème visuel Solideo Digital (2026-09-18, hors plan des étapes numérotées)
+
+### Contexte
+Premier test d'usage réel par l'utilisateur après l'étape 8 (le développement avait jusque-là été
+validé uniquement par moi via des serveurs de dev temporaires). Retour : l'ergonomie et la
+disposition conviennent ; demande de reprendre l'identité visuelle du site vitrine Solideo Digital
+plutôt que le thème violet par défaut de MudBlazor, l'outil étant destiné à être ouvert devant un
+client en RDV (Prompt Maître, usage en direct pendant un rendez-vous). Timing tranché avec
+l'utilisateur : appliqué maintenant plutôt qu'en fin de développement, pour que les étapes 9+
+héritent directement du bon thème sans repasse ultérieure sur les écrans déjà construits.
+
+### Contenu réalisé
+- Charte reprise depuis `solideo-digital/public/css/variables.css` (site Laravel/Tailwind de
+  l'utilisateur, dossier voisin sur disque) : or `#B8935E`, bleu marine `#1A2B3C`, beige `#F5F0E8`,
+  police Inter.
+- Vérification WCAG avant application (calcul de contraste) : l'or seul ne passe pas le seuil
+  AA (2.85:1 sur blanc, texte blanc sur or 2.85:1 aussi) — jamais utilisable comme fond de texte
+  blanc ni comme couleur de texte sur fond clair. Le bleu marine, lui, passe largement partout
+  (14.4:1 sur blanc, 5.1:1 sur or). Palette du thème construite en conséquence : marine = couleur
+  primaire (AppBar, boutons, texte), or = accent secondaire réservé aux surfaces où le texte pardessus reste en marine (`SecondaryContrastText` forcé en marine, pas le blanc par défaut du
+  framework).
+- `Client/Theme/SolideoDigitalTheme.cs` : `MudTheme` centralisé (palettes claire et sombre,
+  typographie Inter), appliqué globalement via `MudThemeProvider` dans `MainLayout.razor`.
+- Logo : détourage du monogramme "SD" depuis le logo source du site (fond beige plein cadre
+  retiré pixel par pixel, le fichier `faviconSD.png` fourni s'étant avéré totalement transparent
+  et inexploitable tel quel) pour un rendu propre sur l'AppBar marine ; réduit à 7 Ko. Favicon
+  généré à partir du même monogramme, réduit de 1024×1024/1,4 Mo à 64×64/2,2 Ko.
+- `index.html` : police Inter chargée depuis Google Fonts (hôte autorisé), favicon Solideo Digital.
+- Couleur de l'indicateur de chargement Blazor harmonisée avec la charte (`#B8935E` au lieu du
+  bleu par défaut du template).
+- Rendu vérifié dans un vrai navigateur : page de connexion, tableau de bord, liste des projets,
+  page Domaine analysé — AppBar marine avec monogramme doré, fond beige, boutons et liens marine,
+  chips de statut lisibles, aucune régression de contraste observée.
+
+### Décisions d'architecture prises
+- Seul le monogramme "SD" (pas le logo complet avec le texte "SOLIDEO DIGITAL") est utilisé dans
+  l'AppBar : le logo complet contenait une grande marge de fond beige plein cadre, disgracieux et
+  lourd (238 Ko même redimensionné) une fois placé sur le fond marine de l'AppBar à petite taille.
+- `SecondaryContrastText` explicitement fixé en marine dans le thème plutôt que laissé au blanc
+  par défaut de MudBlazor, pour que tout composant utilisant `Color.Secondary` (boutons, chips)
+  reste lisible sans avoir à y penser composant par composant.
+
+### Problèmes connus / points ouverts
+- Aucun bug — changement purement visuel, sans impact sur la logique métier ni les tests (95/95
+  toujours au vert, ce changement ne touchant que le Client).
+- Le logo complet (avec texte) n'est pas encore intégré nulle part (seul le monogramme est utilisé
+  dans l'AppBar) — à réévaluer si un futur écran (page de connexion, export PDF) a besoin du logo
+  complet ; il faudra alors le retravailler pour retirer sa marge morte plutôt que réutiliser le
+  fichier source tel quel.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation par l'utilisateur avant commit.

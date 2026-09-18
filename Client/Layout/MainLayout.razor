@@ -3,7 +3,7 @@
 @inject CookieAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
-<MudThemeProvider />
+<MudThemeProvider Theme="@Client.Theme.SolideoDigitalTheme.Theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -13,6 +13,7 @@
         <MudLayout>
             <MudAppBar Elevation="1">
                 <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@BasculerDrawer" />
+                <img src="images/logo-mark-sd.png" alt="Solideo Digital" style="height:32px;width:auto;margin-left:8px" />
                 <MudText Typo="Typo.h6" Class="ml-2">AnalyseProjetSolideoDigital</MudText>
                 <MudSpacer />
                 <MudText Typo="Typo.body2" Class="mr-4 d-none d-sm-flex">@context.User.Identity?.Name</MudText>
