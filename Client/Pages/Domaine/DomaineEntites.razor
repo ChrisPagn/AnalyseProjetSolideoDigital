@@ -1,0 +1,80 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogAsync">
+        Ajouter une entité
+    </MudButton>
+</MudStack>
+
+@if (_entites is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_entites.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucune entité enregistrée pour ce projet.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_entites" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Nom</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Attributs</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Nom">@context.Nom</MudTd>
+            <MudTd DataLabel="Description">@context.Description</MudTd>
+            <MudTd DataLabel="Attributs">@context.Attributs</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<EntiteDto>? _entites;
+
+    protected override async Task OnParametersSetAsync() => await ChargerAsync();
+
+    private async Task ChargerAsync()
+    {
+        _entites = await DomaineApi.GetEntitesAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var parametres = new DialogParameters<EntiteFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<EntiteFormDialog>("Nouvelle entité", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(EntiteDto entite)
+    {
+        var succes = await DomaineApi.SupprimerEntiteAsync(ProjetId, entite.Id);
+        if (succes)
+        {
+            Snackbar.Add("Entité supprimée.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+}

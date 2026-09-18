@@ -1,0 +1,105 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogAsync">
+        Ajouter un problème
+    </MudButton>
+</MudStack>
+
+@if (_problemes is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_problemes.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucun problème enregistré pour ce projet.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_problemes" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Gravité</MudTh>
+            <MudTh>Score</MudTh>
+            <MudTh>Couvert</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Description">@context.Description</MudTd>
+            <MudTd DataLabel="Gravité">
+                <MudChip T="string" Size="Size.Small" Color="@CouleurGravite(context.Gravite)">@context.Gravite</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Score">@context.ScoreCalcule</MudTd>
+            <MudTd DataLabel="Couvert">
+                @if (context.EstCouvert)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.RemoveCircle" Color="Color.Error" Size="Size.Small" title="Besoin non couvert" />
+                }
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<ProblemeDto>? _problemes;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _problemes = await DomaineApi.GetProblemesAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var parametres = new DialogParameters<ProblemeFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<ProblemeFormDialog>("Nouveau problème", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(ProblemeDto probleme)
+    {
+        var succes = await DomaineApi.SupprimerProblemeAsync(ProjetId, probleme.Id);
+        if (succes)
+        {
+            Snackbar.Add("Problème supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+
+    private static Color CouleurGravite(Gravite gravite) => gravite switch
+    {
+        Gravite.Faible => Color.Success,
+        Gravite.Modere => Color.Info,
+        Gravite.Important => Color.Warning,
+        Gravite.Critique => Color.Error,
+        _ => Color.Default
+    };
+}

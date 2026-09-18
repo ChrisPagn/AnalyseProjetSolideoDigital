@@ -1,0 +1,88 @@
+@inject DomaineApiClient DomaineApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Nom" @bind-Value="_nom" Required="true"
+                          RequiredError="Le nom est requis." Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Description" @bind-Value="_description" Lines="2" Class="mb-3" />
+            <MudSelect T="PrioriteMoSCoW" Label="Priorité (MoSCoW)" @bind-Value="_priorite" Class="mb-3">
+                <MudSelectItem Value="PrioriteMoSCoW.MustHave">Must have</MudSelectItem>
+                <MudSelectItem Value="PrioriteMoSCoW.ShouldHave">Should have</MudSelectItem>
+                <MudSelectItem Value="PrioriteMoSCoW.CouldHave">Could have</MudSelectItem>
+                <MudSelectItem Value="PrioriteMoSCoW.WontHave">Won't have</MudSelectItem>
+            </MudSelect>
+            <MudSelect T="StatutFonctionnalite" Label="Statut" @bind-Value="_statut" Class="mb-3">
+                <MudSelectItem Value="StatutFonctionnalite.Identifiee">Identifiée</MudSelectItem>
+                <MudSelectItem Value="StatutFonctionnalite.Specifiee">Spécifiée</MudSelectItem>
+                <MudSelectItem Value="StatutFonctionnalite.Validee">Validée</MudSelectItem>
+                <MudSelectItem Value="StatutFonctionnalite.EnDeveloppement">En développement</MudSelectItem>
+                <MudSelectItem Value="StatutFonctionnalite.Livree">Livrée</MudSelectItem>
+            </MudSelect>
+            @if (_acteurs is not null)
+            {
+                <MudSelect T="int?" Label="Acteur associé" @bind-Value="_acteurId" Clearable="true" Class="mb-3">
+                    @foreach (var acteur in _acteurs)
+                    {
+                        <MudSelectItem T="int?" Value="@acteur.Id">@acteur.Nom</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudAlert Severity="Severity.Info" Dense="true">
+                Cette fonctionnalité sera créée orpheline. Reliez-la à un problème depuis l'onglet
+                Traçabilité pour la couvrir.
+            </MudAlert>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+
+    private MudForm? _form;
+    private IReadOnlyList<ActeurDto>? _acteurs;
+    private string _nom = string.Empty;
+    private string? _description;
+    private PrioriteMoSCoW _priorite = PrioriteMoSCoW.ShouldHave;
+    private StatutFonctionnalite _statut = StatutFonctionnalite.Identifiee;
+    private int? _acteurId;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _acteurs = await DomaineApi.GetActeursAsync(ProjetId);
+    }
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertFonctionnaliteDto(_acteurId, _nom, _description, _priorite, _statut);
+        var resultat = await DomaineApi.CreerFonctionnaliteAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

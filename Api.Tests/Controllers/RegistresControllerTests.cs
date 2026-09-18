@@ -71,18 +71,19 @@ public class RegistresControllerTests : IAsyncLifetime
     [Fact]
     public async Task Creer_question_bloquante_ouverte_plafonne_la_maturite_a_1()
     {
+        // Bloc A (phases 01-04) terminé pour atteindre Niveau 2 par défaut, afin que le test
+        // observe réellement l'effet du plafonnement (redescente 2 -> 1), pas une coïncidence
+        // où le niveau était déjà au plafond avant l'ajout de la question.
         var phases = await _client.GetFromJsonAsync<List<Shared.Dtos.Phases.PhaseDto>>($"api/projets/{_projetId}/phases");
         Assert.NotNull(phases);
-        var phase1 = phases!.First(p => p.Numero == 1);
-        var phase2 = phases.First(p => p.Numero == 2);
-
-        await _client.PutAsJsonAsync($"api/projets/{_projetId}/phases/{phase1.Id}/statut",
-            new Shared.Dtos.Phases.UpdateStatutPhaseDto(StatutPhase.Terminee));
-        await _client.PutAsJsonAsync($"api/projets/{_projetId}/phases/{phase2.Id}/statut",
-            new Shared.Dtos.Phases.UpdateStatutPhaseDto(StatutPhase.Terminee));
+        foreach (var phase in phases!.Where(p => p.Numero <= 4))
+        {
+            await _client.PutAsJsonAsync($"api/projets/{_projetId}/phases/{phase.Id}/statut",
+                new Shared.Dtos.Phases.UpdateStatutPhaseDto(StatutPhase.Terminee));
+        }
 
         var projetAvant = await _client.GetFromJsonAsync<ProjetDto>($"api/projets/{_projetId}");
-        Assert.Equal(NiveauMaturite.Niveau1Comprehension, projetAvant!.NiveauMaturite);
+        Assert.Equal(NiveauMaturite.Niveau2AnalyseMetier, projetAvant!.NiveauMaturite);
 
         await _client.PostAsJsonAsync($"api/projets/{_projetId}/questions",
             new UpsertQuestionRegistreDto(null, "Qui décide en cas de désaccord ?", ImportanceQuestion.Bloquante, StatutQuestion.Ouverte));

@@ -1,0 +1,87 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogAsync">
+        Ajouter une automatisation
+    </MudButton>
+</MudStack>
+
+@if (_automatisations is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_automatisations.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucune automatisation enregistrée pour ce projet.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_automatisations" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Déclencheur</MudTh>
+            <MudTh>Condition</MudTh>
+            <MudTh>Action</MudTh>
+            <MudTh>Validation humaine</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Déclencheur">@context.Declencheur</MudTd>
+            <MudTd DataLabel="Condition">@context.Condition</MudTd>
+            <MudTd DataLabel="Action">@context.Action</MudTd>
+            <MudTd DataLabel="Validation humaine">
+                @if (context.ValidationHumaine)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<AutomatisationDto>? _automatisations;
+
+    protected override async Task OnParametersSetAsync() => await ChargerAsync();
+
+    private async Task ChargerAsync()
+    {
+        _automatisations = await DomaineApi.GetAutomatisationsAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var parametres = new DialogParameters<AutomatisationFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<AutomatisationFormDialog>("Nouvelle automatisation", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(AutomatisationDto automatisation)
+    {
+        var succes = await DomaineApi.SupprimerAutomatisationAsync(ProjetId, automatisation.Id);
+        if (succes)
+        {
+            Snackbar.Add("Automatisation supprimée.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,65 @@
+@inject DomaineApiClient DomaineApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Entité concernée" @bind-Value="_entiteConcernee" Required="true"
+                          RequiredError="L'entité concernée est requise." Class="mb-3" Style="min-height:44px"
+                          HelperText="Ex. QuestionRegistre, Probleme, Fonctionnalite..." />
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="4" Class="mb-3">
+                <MudCheckBox T="bool" @bind-Value="_peutVoir" Label="Voir" />
+                <MudCheckBox T="bool" @bind-Value="_peutCreer" Label="Créer" />
+                <MudCheckBox T="bool" @bind-Value="_peutModifier" Label="Modifier" />
+                <MudCheckBox T="bool" @bind-Value="_peutSupprimer" Label="Supprimer" />
+                <MudCheckBox T="bool" @bind-Value="_peutValider" Label="Valider" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int ActeurId { get; set; }
+
+    private MudForm? _form;
+    private string _entiteConcernee = string.Empty;
+    private bool _peutVoir;
+    private bool _peutCreer;
+    private bool _peutModifier;
+    private bool _peutSupprimer;
+    private bool _peutValider;
+    private bool _enCours;
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertPermissionDto(_entiteConcernee, _peutVoir, _peutCreer, _peutModifier, _peutSupprimer, _peutValider);
+        var resultat = await DomaineApi.AjouterPermissionAsync(ProjetId, ActeurId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

@@ -1,0 +1,80 @@
+@page "/projets/{ProjetId:int}/domaine"
+@attribute [Authorize]
+@inject ProjetsApiClient ProjetsApi
+
+<PageTitle>Domaine analysé — @(_projet?.Nom ?? "Chargement...")</PageTitle>
+
+@if (_projet is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <div>
+            <MudText Typo="Typo.h4">@_projet.Nom</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Domaine du projet analysé — @_projet.ClientNom</MudText>
+        </div>
+        <MudChip T="string" Color="@CouleurMaturite(_projet.NiveauMaturite)">@LibelleMaturite(_projet.NiveauMaturite)</MudChip>
+    </MudStack>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudTabs>
+            <MudTabPanel Text="Problèmes">
+                <DomaineProblemes ProjetId="@ProjetId" />
+            </MudTabPanel>
+            <MudTabPanel Text="Processus">
+                <DomaineProcessus ProjetId="@ProjetId" />
+            </MudTabPanel>
+            <MudTabPanel Text="Acteurs">
+                <DomaineActeurs ProjetId="@ProjetId" />
+            </MudTabPanel>
+            <MudTabPanel Text="Entités">
+                <DomaineEntites ProjetId="@ProjetId" />
+            </MudTabPanel>
+            <MudTabPanel Text="Documents">
+                <DomaineDocuments ProjetId="@ProjetId" />
+            </MudTabPanel>
+            <MudTabPanel Text="Fonctionnalités">
+                <DomaineFonctionnalites ProjetId="@ProjetId" />
+            </MudTabPanel>
+            <MudTabPanel Text="Automatisations">
+                <DomaineAutomatisations ProjetId="@ProjetId" />
+            </MudTabPanel>
+            <MudTabPanel Text="Traçabilité">
+                <DomaineTracabilite ProjetId="@ProjetId" />
+            </MudTabPanel>
+        </MudTabs>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private ProjetDto? _projet;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _projet = await ProjetsApi.GetParIdAsync(ProjetId);
+    }
+
+    private static string LibelleMaturite(NiveauMaturite niveau) => niveau switch
+    {
+        NiveauMaturite.Niveau0Inconnu => "0 — Inconnu",
+        NiveauMaturite.Niveau1Comprehension => "1 — Compréhension",
+        NiveauMaturite.Niveau2AnalyseMetier => "2 — Analyse métier",
+        NiveauMaturite.Niveau3Specification => "3 — Spécification",
+        NiveauMaturite.Niveau4Conception => "4 — Conception",
+        NiveauMaturite.Niveau5PretPourDev => "5 — Prêt pour dev",
+        _ => niveau.ToString()
+    };
+
+    private static Color CouleurMaturite(NiveauMaturite niveau) => niveau switch
+    {
+        NiveauMaturite.Niveau0Inconnu => Color.Default,
+        NiveauMaturite.Niveau1Comprehension or NiveauMaturite.Niveau2AnalyseMetier => Color.Info,
+        NiveauMaturite.Niveau3Specification or NiveauMaturite.Niveau4Conception => Color.Warning,
+        NiveauMaturite.Niveau5PretPourDev => Color.Success,
+        _ => Color.Default
+    };
+}

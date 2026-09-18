@@ -1,0 +1,59 @@
+@inject DomaineApiClient DomaineApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Type" @bind-Value="_type" Required="true"
+                          RequiredError="Le type est requis." Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Origine" @bind-Value="_origine" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Destination" @bind-Value="_destination" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Format" @bind-Value="_format" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Durée de conservation" @bind-Value="_dureeConservation" Class="mb-3" Style="min-height:44px" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+
+    private MudForm? _form;
+    private string _type = string.Empty;
+    private string? _origine;
+    private string? _destination;
+    private string? _format;
+    private string? _dureeConservation;
+    private bool _enCours;
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertDocumentMetierDto(_type, _origine, _destination, _format, _dureeConservation);
+        var resultat = await DomaineApi.CreerDocumentAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

@@ -47,6 +47,8 @@ else
             <MudTd>
                 <MudIconButton Icon="@Icons.Material.Filled.ListAlt" Size="Size.Small"
                                title="Voir les phases" OnClick="@(() => Navigation.NavigateTo($"/projets/{context.Id}/phases"))" />
+                <MudIconButton Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small"
+                               title="Domaine analysé" OnClick="@(() => Navigation.NavigateTo($"/projets/{context.Id}/domaine"))" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
                                OnClick="@(() => SupprimerAsync(context))" />
             </MudTd>

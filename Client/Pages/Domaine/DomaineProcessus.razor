@@ -1,0 +1,150 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogProcessusAsync">
+        Ajouter un processus
+    </MudButton>
+</MudStack>
+
+@if (_processus is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_processus.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucun processus enregistré pour ce projet.</MudAlert>
+}
+else
+{
+    @foreach (var processus in _processus)
+    {
+        <MudPaper Class="pa-3 mb-3" Outlined="true">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <div>
+                    <MudText Typo="Typo.subtitle1">@processus.Code — @processus.Nom</MudText>
+                    @if (!string.IsNullOrWhiteSpace(processus.Declencheur))
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Déclencheur : @processus.Declencheur</MudText>
+                    }
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerProcessusAsync(processus))" />
+            </MudStack>
+
+            @if (processus.Etapes.Count > 0)
+            {
+                <MudTable Items="@processus.Etapes" Dense="true" Class="mt-2">
+                    <HeaderContent>
+                        <MudTh>#</MudTh>
+                        <MudTh>Acteur</MudTh>
+                        <MudTh>Action</MudTh>
+                        <MudTh>Outil</MudTh>
+                        <MudTh>Exemple validé</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="#">@context.Ordre</MudTd>
+                        <MudTd DataLabel="Acteur">@context.Acteur</MudTd>
+                        <MudTd DataLabel="Action">@context.Action</MudTd>
+                        <MudTd DataLabel="Outil">@context.Outil</MudTd>
+                        <MudTd DataLabel="Exemple validé">
+                            @if (context.ExempleValide)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.RadioButtonUnchecked" Color="Color.Warning" Size="Size.Small" title="À confirmer" />
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => SupprimerEtapeAsync(processus.Id, context.Id))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" Class="mt-2"
+                       OnClick="@(() => OuvrirDialogEtapeAsync(processus))">
+                Ajouter une étape
+            </MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<ProcessusDto>? _processus;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _processus = await DomaineApi.GetProcessusAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogProcessusAsync()
+    {
+        var parametres = new DialogParameters<ProcessusFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<ProcessusFormDialog>("Nouveau processus", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerProcessusAsync(ProcessusDto processus)
+    {
+        var succes = await DomaineApi.SupprimerProcessusAsync(ProjetId, processus.Id);
+        if (succes)
+        {
+            Snackbar.Add("Processus supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+
+    private async Task OuvrirDialogEtapeAsync(ProcessusDto processus)
+    {
+        var parametres = new DialogParameters<EtapeProcessusFormDialog>
+        {
+            { x => x.ProjetId, ProjetId },
+            { x => x.ProcessusId, processus.Id },
+            { x => x.OrdreParDefaut, processus.Etapes.Count + 1 }
+        };
+        var dialog = await DialogService.ShowAsync<EtapeProcessusFormDialog>("Nouvelle étape", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerEtapeAsync(int processusId, int etapeId)
+    {
+        var succes = await DomaineApi.SupprimerEtapeAsync(ProjetId, processusId, etapeId);
+        if (succes)
+        {
+            Snackbar.Add("Étape supprimée.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+}

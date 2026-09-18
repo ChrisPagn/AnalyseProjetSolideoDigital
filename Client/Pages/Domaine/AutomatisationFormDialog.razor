@@ -1,0 +1,58 @@
+@inject DomaineApiClient DomaineApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Déclencheur" @bind-Value="_declencheur" Required="true"
+                          RequiredError="Le déclencheur est requis." Lines="2" Class="mb-3" />
+            <MudTextField T="string" Label="Condition" @bind-Value="_condition" Lines="2" Class="mb-3" />
+            <MudTextField T="string" Label="Action" @bind-Value="_action" Required="true"
+                          RequiredError="L'action est requise." Lines="2" Class="mb-3" />
+            <MudSwitch T="bool" @bind-Value="_validationHumaine" Label="Validation humaine requise" Color="Color.Primary" Class="mb-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+
+    private MudForm? _form;
+    private string _declencheur = string.Empty;
+    private string? _condition;
+    private string _action = string.Empty;
+    private bool _validationHumaine;
+    private bool _enCours;
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertAutomatisationDto(_declencheur, _condition, _action, _validationHumaine);
+        var resultat = await DomaineApi.CreerAutomatisationAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

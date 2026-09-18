@@ -1,0 +1,58 @@
+@inject DomaineApiClient DomaineApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Nom" @bind-Value="_nom" Required="true"
+                          RequiredError="Le nom est requis." Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Description" @bind-Value="_description" Lines="2" Class="mb-3" />
+            <MudTextField T="string" Label="Attributs" @bind-Value="_attributs" Lines="2" Class="mb-3"
+                          HelperText="Texte libre — ex. Nom, email, cotisation" />
+            <MudTextField T="string" Label="Relations" @bind-Value="_relations" Lines="2" Class="mb-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+
+    private MudForm? _form;
+    private string _nom = string.Empty;
+    private string? _description;
+    private string? _attributs;
+    private string? _relations;
+    private bool _enCours;
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertEntiteDto(_nom, _description, _attributs, _relations);
+        var resultat = await DomaineApi.CreerEntiteAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

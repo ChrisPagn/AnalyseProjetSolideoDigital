@@ -1,0 +1,84 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogAsync">
+        Ajouter un document
+    </MudButton>
+</MudStack>
+
+@if (_documents is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_documents.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucun document enregistré pour ce projet.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_documents" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Origine</MudTh>
+            <MudTh>Destination</MudTh>
+            <MudTh>Format</MudTh>
+            <MudTh>Conservation</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Type">@context.Type</MudTd>
+            <MudTd DataLabel="Origine">@context.Origine</MudTd>
+            <MudTd DataLabel="Destination">@context.Destination</MudTd>
+            <MudTd DataLabel="Format">@context.Format</MudTd>
+            <MudTd DataLabel="Conservation">@context.DureeConservation</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<DocumentMetierDto>? _documents;
+
+    protected override async Task OnParametersSetAsync() => await ChargerAsync();
+
+    private async Task ChargerAsync()
+    {
+        _documents = await DomaineApi.GetDocumentsAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var parametres = new DialogParameters<DocumentFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<DocumentFormDialog>("Nouveau document", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(DocumentMetierDto document)
+    {
+        var succes = await DomaineApi.SupprimerDocumentAsync(ProjetId, document.Id);
+        if (succes)
+        {
+            Snackbar.Add("Document supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+}

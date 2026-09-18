@@ -1,0 +1,83 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+    Source de vérité unique pour la couverture besoin ↔ fonctionnalité (Prompt Maître 4.1). Un
+    Problème sans lien reste « non couvert », une Fonctionnalité sans lien reste « orpheline ».
+</MudText>
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogAsync">
+        Créer un lien de traçabilité
+    </MudButton>
+</MudStack>
+
+@if (_liens is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_liens.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucun lien de traçabilité pour ce projet.</MudAlert>
+}
+else
+{
+    <MudTable Items="@_liens" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Problème</MudTh>
+            <MudTh>Fonctionnalité</MudTh>
+            <MudTh>Entité</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Problème">@context.ProblemeCode</MudTd>
+            <MudTd DataLabel="Fonctionnalité">@context.FonctionnaliteCode</MudTd>
+            <MudTd DataLabel="Entité">@context.EntiteCode</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<LienTracabiliteDto>? _liens;
+
+    protected override async Task OnParametersSetAsync() => await ChargerAsync();
+
+    private async Task ChargerAsync()
+    {
+        _liens = await DomaineApi.GetLiensTracabiliteAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var parametres = new DialogParameters<LienTracabiliteFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<LienTracabiliteFormDialog>("Nouveau lien de traçabilité", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(LienTracabiliteDto lien)
+    {
+        var succes = await DomaineApi.SupprimerLienTracabiliteAsync(ProjetId, lien.Id);
+        if (succes)
+        {
+            Snackbar.Add("Lien supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+}

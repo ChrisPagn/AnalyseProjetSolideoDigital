@@ -82,6 +82,12 @@ public class QuestionsRegistreController(
 
         db.QuestionsRegistre.Add(question);
 
+        // La question doit être persistée avant le recalcul : MaturiteCalculatorService la relit
+        // par requête SQL directe (bug latent non détecté à l'étape 5 — le test passait parce que
+        // le niveau était déjà au plafond attendu avant l'ajout ; même corruption que sur
+        // ProblemesController/FonctionnalitesController/LiensTracabiliteController et étape 4).
+        await db.SaveChangesAsync(cancellationToken);
+
         // Une nouvelle question Bloquante+Ouverte peut plafonner NiveauMaturite à 1
         // (Prompt Maître 4.3) : recalcul dans la même opération (section 5.4).
         await maturiteCalculator.RecalculerEtPersisterAsync(projetId, cancellationToken);

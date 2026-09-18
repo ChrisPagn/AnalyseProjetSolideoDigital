@@ -1,0 +1,144 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogActeurAsync">
+        Ajouter un acteur
+    </MudButton>
+</MudStack>
+
+@if (_acteurs is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_acteurs.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucun acteur enregistré pour ce projet.</MudAlert>
+}
+else
+{
+    @foreach (var acteur in _acteurs)
+    {
+        <MudPaper Class="pa-3 mb-3" Outlined="true">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <div>
+                    <MudText Typo="Typo.subtitle1">@acteur.Code — @acteur.Nom</MudText>
+                    @if (!string.IsNullOrWhiteSpace(acteur.Fonction))
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@acteur.Fonction</MudText>
+                    }
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerActeurAsync(acteur))" />
+            </MudStack>
+
+            @if (acteur.Permissions.Count > 0)
+            {
+                <MudTable Items="@acteur.Permissions" Dense="true" Class="mt-2">
+                    <HeaderContent>
+                        <MudTh>Entité concernée</MudTh>
+                        <MudTh>Voir</MudTh>
+                        <MudTh>Créer</MudTh>
+                        <MudTh>Modifier</MudTh>
+                        <MudTh>Supprimer</MudTh>
+                        <MudTh>Valider</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Entité">@context.EntiteConcernee</MudTd>
+                        <MudTd DataLabel="Voir">@Coche(context.PeutVoir)</MudTd>
+                        <MudTd DataLabel="Créer">@Coche(context.PeutCreer)</MudTd>
+                        <MudTd DataLabel="Modifier">@Coche(context.PeutModifier)</MudTd>
+                        <MudTd DataLabel="Supprimer">@Coche(context.PeutSupprimer)</MudTd>
+                        <MudTd DataLabel="Valider">@Coche(context.PeutValider)</MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => SupprimerPermissionAsync(acteur.Id, context.Id))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" Class="mt-2"
+                       OnClick="@(() => OuvrirDialogPermissionAsync(acteur))">
+                Ajouter une permission
+            </MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<ActeurDto>? _acteurs;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _acteurs = await DomaineApi.GetActeursAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogActeurAsync()
+    {
+        var parametres = new DialogParameters<ActeurFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<ActeurFormDialog>("Nouvel acteur", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerActeurAsync(ActeurDto acteur)
+    {
+        var succes = await DomaineApi.SupprimerActeurAsync(ProjetId, acteur.Id);
+        if (succes)
+        {
+            Snackbar.Add("Acteur supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+
+    private async Task OuvrirDialogPermissionAsync(ActeurDto acteur)
+    {
+        var parametres = new DialogParameters<PermissionFormDialog>
+        {
+            { x => x.ProjetId, ProjetId },
+            { x => x.ActeurId, acteur.Id }
+        };
+        var dialog = await DialogService.ShowAsync<PermissionFormDialog>("Nouvelle permission", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerPermissionAsync(int acteurId, int permissionId)
+    {
+        var succes = await DomaineApi.SupprimerPermissionAsync(ProjetId, acteurId, permissionId);
+        if (succes)
+        {
+            Snackbar.Add("Permission supprimée.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+
+    private static string Coche(bool valeur) => valeur ? "✓" : "";
+}

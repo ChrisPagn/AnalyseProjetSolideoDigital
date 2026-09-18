@@ -1,0 +1,77 @@
+@inject DomaineApiClient DomaineApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudNumericField T="int" Label="Ordre" @bind-Value="_ordre" Min="1" Class="mb-3" />
+            <MudTextField T="string" Label="Acteur" @bind-Value="_acteur" Required="true"
+                          RequiredError="L'acteur est requis." Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Action" @bind-Value="_action" Required="true"
+                          RequiredError="L'action est requise." Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Outil" @bind-Value="_outil" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Durée estimée" @bind-Value="_dureeEstimee" Class="mb-3" Style="min-height:44px" />
+            <MudTextField T="string" Label="Erreurs connues" @bind-Value="_erreursConnues" Lines="2" Class="mb-3" />
+            <MudSwitch T="bool" @bind-Value="_exempleValide" Label="Exemple concret vérifié" Color="Color.Success" Class="mb-3" />
+            @if (_exempleValide)
+            {
+                <MudTextField T="string" Label="Description de l'exemple" @bind-Value="_exempleDescription" Lines="2" Class="mb-3" />
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+    [Parameter] public int ProcessusId { get; set; }
+    [Parameter] public int OrdreParDefaut { get; set; }
+
+    private MudForm? _form;
+    private int _ordre;
+    private string _acteur = string.Empty;
+    private string _action = string.Empty;
+    private string? _outil;
+    private string? _dureeEstimee;
+    private string? _erreursConnues;
+    private bool _exempleValide;
+    private string? _exempleDescription;
+    private bool _enCours;
+
+    protected override void OnInitialized()
+    {
+        _ordre = OrdreParDefaut;
+    }
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertEtapeProcessusDto(
+            _ordre, _acteur, _action, _outil, _dureeEstimee, _erreursConnues, _exempleValide, _exempleDescription);
+        var resultat = await DomaineApi.AjouterEtapeAsync(ProjetId, ProcessusId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

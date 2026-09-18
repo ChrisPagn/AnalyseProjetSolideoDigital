@@ -1,0 +1,86 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_problemes is null || _fonctionnalites is null || _entites is null)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                Au moins un des champs ci-dessous est requis.
+            </MudText>
+            <MudSelect T="int?" Label="Problème" @bind-Value="_problemeId" Clearable="true" Class="mb-3">
+                @foreach (var probleme in _problemes)
+                {
+                    <MudSelectItem T="int?" Value="@probleme.Id">@probleme.Code — @probleme.Description</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="int?" Label="Fonctionnalité" @bind-Value="_fonctionnaliteId" Clearable="true" Class="mb-3">
+                @foreach (var fonctionnalite in _fonctionnalites)
+                {
+                    <MudSelectItem T="int?" Value="@fonctionnalite.Id">@fonctionnalite.Code — @fonctionnalite.Nom</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="int?" Label="Entité" @bind-Value="_entiteId" Clearable="true" Class="mb-3">
+                @foreach (var entite in _entites)
+                {
+                    <MudSelectItem T="int?" Value="@entite.Id">@entite.Code — @entite.Nom</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<ProblemeDto>? _problemes;
+    private IReadOnlyList<FonctionnaliteDto>? _fonctionnalites;
+    private IReadOnlyList<EntiteDto>? _entites;
+    private int? _problemeId;
+    private int? _fonctionnaliteId;
+    private int? _entiteId;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _problemes = await DomaineApi.GetProblemesAsync(ProjetId);
+        _fonctionnalites = await DomaineApi.GetFonctionnalitesAsync(ProjetId);
+        _entites = await DomaineApi.GetEntitesAsync(ProjetId);
+    }
+
+    private async Task EnregistrerAsync()
+    {
+        if (_problemeId is null && _fonctionnaliteId is null && _entiteId is null)
+        {
+            Snackbar.Add("Sélectionnez au moins un élément à relier.", Severity.Warning);
+            return;
+        }
+
+        _enCours = true;
+        var dto = new CreerLienTracabiliteDto(_problemeId, _fonctionnaliteId, _entiteId, null);
+        var (succes, erreur) = await DomaineApi.CreerLienTracabiliteAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (succes)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add(erreur ?? "Impossible de créer le lien.", Severity.Error);
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}

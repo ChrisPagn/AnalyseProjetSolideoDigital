@@ -315,3 +315,74 @@ Voir `git log` / `git status` — en attente de validation de l'étape par l'uti
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Étape 6 — Domaine projet analysé (2026-09-18)
+
+### Contenu réalisé
+- Trois décisions de conception validées avec l'utilisateur avant de coder : (1) `ScoreCalcule`
+  d'un Problème calculé côté serveur uniquement (jamais saisi/assignable via l'UI, même principe
+  que `NiveauMaturite`) ; (2) `Acteur`/`Permission` (grille Voir/Créer/Modifier/Supprimer/Valider
+  par `EntiteConcernee`) inclus dès cette étape, pas reporté ; (3) les 7 entités sans `PhaseId`
+  (Problème, Processus, Acteur, Entité, DocumentMetier, Fonctionnalité, Automatisation) vivent
+  dans une **nouvelle page dédiée par projet** (`/projets/{id}/domaine`), distincte de la page
+  Phase — cohérent avec le modèle de données où elles ne sont rattachées qu'au Projet.
+- `Shared/Dtos/Domaine` : DTOs des 8 entités (y compris `EtapeProcessus`, `Permission`,
+  `CritereAcceptation`, `LienTracabilite` en sous-ressources).
+- `Api/Validators` : un validator FluentValidation par entité (formats/longueurs uniquement,
+  toujours synchrone — leçon de l'étape 3).
+- 8 Controllers imbriqués sous `/api/projets/{projetId}/...` (`[Authorize]`) :
+  `ProblemesController` (calcule `ScoreCalcule` côté serveur, recalcule la maturité),
+  `ProcessusController` (+ sous-ressource `etapes`), `ActeursController` (+ sous-ressource
+  `permissions`), `EntitesController`, `DocumentsMetierController`, `FonctionnalitesController`
+  (indicateur `EstOrpheline`, + sous-ressource `criteres`, recalcule la maturité),
+  `AutomatisationsController`, `LiensTracabiliteController` (source de vérité unique pour la
+  couverture besoin↔fonctionnalité, contrainte CHECK déjà en base depuis l'étape 1, recalcule la
+  maturité à la création et à la suppression).
+- Client Blazor : `DomaineApiClient`, page `DomaineProjet.razor` avec 8 onglets MudBlazor
+  (Problèmes, Processus, Acteurs, Entités, Documents, Fonctionnalités, Automatisations,
+  Traçabilité), chacun avec ses composants liste/dialog dédiés. Affichage en direct du score
+  calculé pendant la saisie d'un Problème, badge « Orpheline » sur les Fonctionnalités non
+  couvertes, coche « Couvert » sur les Problèmes reliés, gestion imbriquée des étapes de processus
+  et des permissions par acteur. Bouton d'accès ajouté sur la page Projets.
+- Tests xUnit (`DomaineControllerTests`, 18 tests) : génération de codes (PROB/PROC/ACT/ENT/
+  DOC/AUTO/F-xxx), calcul du score, étapes de processus avec `ExempleValide`, permissions
+  imbriquées, indicateur orpheline, impact réel sur `NiveauMaturite` (Problème non couvert et
+  Fonctionnalité orpheline plafonnent à 4, un lien de traçabilité débloque le niveau 5, sa
+  suppression fait redescendre la couverture), rejet d'un lien totalement vide. 77/77 tests
+  passent au total (62 hérités des étapes 1-5 + 15 nouveaux, net des deux corrections ci-dessous).
+- Flux vérifié dans un vrai navigateur : création de Problème avec score affiché en direct,
+  création de Fonctionnalité orpheline, création d'un lien de traçabilité, et vérification
+  visuelle que l'indicateur « Couvert » du Problème passe au vert après le lien.
+
+### Décisions d'architecture prises
+- Voir les 3 décisions validées avec l'utilisateur en tête de section.
+
+### Problèmes connus / points ouverts — deux bugs réels détectés et corrigés
+- **Bug de classe récurrente (recalcul avant persistance)** : `ProblemesController.Creer`,
+  `FonctionnalitesController.Creer` et `LiensTracabiliteController.Creer` appelaient
+  `MaturiteCalculatorService.RecalculerEtPersisterAsync` **avant** `SaveChangesAsync()` de
+  l'entité ajoutée — or le calculateur relit systématiquement les tables par requête SQL directe,
+  donc l'entité fraîchement ajoutée (encore seulement trackée en mémoire) n'était pas vue. Même
+  variante du bug déjà rencontré et corrigé à l'étape 4
+  (`UpdateStatutPhaseAction`). **Un 4e site était infecté sans avoir été détecté à l'étape 5** :
+  `QuestionsRegistreController.Creer` — son test passait par coïncidence (le niveau était déjà au
+  plafond attendu avant l'ajout de la question, donc le bug ne changeait rien d'observable). Les
+  4 sites ont été corrigés (un `SaveChangesAsync()` systématique juste avant tout appel à
+  `RecalculerEtPersisterAsync`) et le test de l'étape 5 a été durci pour qu'il ne puisse plus
+  masquer une régression de ce type. Un audit de tous les appels à `RecalculerEtPersisterAsync`
+  dans le code a confirmé qu'aucun autre site n'était concerné.
+- **Bug SQLite : `ORDER BY` sur une colonne `decimal`** — `ProblemesController.GetTous` triait
+  par `ScoreCalcule` (decimal) directement en SQL via `OrderByDescending`, ce que le provider
+  SQLite ne sait pas traduire (`System.NotSupportedException`), provoquant un 500 sur **tout**
+  appel à la liste des problèmes dès qu'au moins un existait. Non détecté par les tests xUnit car
+  aucun test n'appelait `GetTous` après une création (`Creer_probleme_calcule_le_score_cote_serveur`
+  ne vérifiait que la réponse du POST). Découvert lors du test manuel en navigateur : la liste
+  restait vide après création d'un problème alors que l'entité existait bien en base. Corrigé en
+  matérialisant la liste puis en triant côté client (`.ToListAsync()` puis `.OrderByDescending()`
+  en mémoire) ; un test `GetTous_problemes_les_retourne_tries_par_score_decroissant` a été ajouté
+  pour couvrir ce chemin à l'avenir.
+- Les points des étapes 1-5 (noms de phases 5-18 provisoires, seuils `NiveauParPhases` des Blocs
+  B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.

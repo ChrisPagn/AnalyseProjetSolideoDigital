@@ -1,0 +1,137 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@OuvrirDialogAsync">
+        Ajouter une fonctionnalité
+    </MudButton>
+</MudStack>
+
+@if (_fonctionnalites is null)
+{
+    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+}
+else if (_fonctionnalites.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">Aucune fonctionnalité enregistrée pour ce projet.</MudAlert>
+}
+else
+{
+    @foreach (var fonctionnalite in _fonctionnalites)
+    {
+        <MudPaper Class="pa-3 mb-3" Outlined="true">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <div>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.subtitle1">@fonctionnalite.Code — @fonctionnalite.Nom</MudText>
+                        @if (fonctionnalite.EstOrpheline)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
+                                Orpheline
+                            </MudChip>
+                        }
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default">@fonctionnalite.Priorite</MudChip>
+                    </MudStack>
+                    @if (!string.IsNullOrWhiteSpace(fonctionnalite.ActeurNom))
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Acteur : @fonctionnalite.ActeurNom</MudText>
+                    }
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => SupprimerAsync(fonctionnalite))" />
+            </MudStack>
+
+            @if (fonctionnalite.CriteresAcceptation.Count > 0)
+            {
+                <MudList T="string" Dense="true" Class="mt-2">
+                    @foreach (var critere in fonctionnalite.CriteresAcceptation)
+                    {
+                        <MudListItem T="string">
+                            <div class="d-flex align-center justify-space-between" style="width:100%">
+                                <span>Étant donné @critere.Given, quand @critere.When, alors @critere.Then</span>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(() => SupprimerCritereAsync(fonctionnalite.Id, critere.Id))" />
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" Class="mt-2"
+                       OnClick="@(() => OuvrirDialogCritereAsync(fonctionnalite))">
+                Ajouter un critère d'acceptation
+            </MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<FonctionnaliteDto>? _fonctionnalites;
+
+    protected override async Task OnParametersSetAsync() => await ChargerAsync();
+
+    private async Task ChargerAsync()
+    {
+        _fonctionnalites = await DomaineApi.GetFonctionnalitesAsync(ProjetId);
+    }
+
+    private async Task OuvrirDialogAsync()
+    {
+        var parametres = new DialogParameters<FonctionnaliteFormDialog> { { x => x.ProjetId, ProjetId } };
+        var dialog = await DialogService.ShowAsync<FonctionnaliteFormDialog>("Nouvelle fonctionnalité", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerAsync(FonctionnaliteDto fonctionnalite)
+    {
+        var succes = await DomaineApi.SupprimerFonctionnaliteAsync(ProjetId, fonctionnalite.Id);
+        if (succes)
+        {
+            Snackbar.Add("Fonctionnalité supprimée.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+
+    private async Task OuvrirDialogCritereAsync(FonctionnaliteDto fonctionnalite)
+    {
+        var parametres = new DialogParameters<CritereAcceptationFormDialog>
+        {
+            { x => x.ProjetId, ProjetId },
+            { x => x.FonctionnaliteId, fonctionnalite.Id }
+        };
+        var dialog = await DialogService.ShowAsync<CritereAcceptationFormDialog>("Nouveau critère d'acceptation", parametres);
+        var resultat = await dialog.Result;
+
+        if (resultat is { Canceled: false })
+        {
+            await ChargerAsync();
+        }
+    }
+
+    private async Task SupprimerCritereAsync(int fonctionnaliteId, int critereId)
+    {
+        var succes = await DomaineApi.SupprimerCritereAsync(ProjetId, fonctionnaliteId, critereId);
+        if (succes)
+        {
+            Snackbar.Add("Critère supprimé.", Severity.Success);
+            await ChargerAsync();
+        }
+        else
+        {
+            Snackbar.Add("Suppression impossible.", Severity.Error);
+        }
+    }
+}

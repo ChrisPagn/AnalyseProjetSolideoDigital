@@ -1,0 +1,67 @@
+@inject DomaineApiClient DomaineApi
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string" Label="Description" @bind-Value="_description" Required="true"
+                          RequiredError="La description est requise." Lines="2" Class="mb-3" />
+            <MudSelect T="Gravite" Label="Gravité" @bind-Value="_gravite" Class="mb-3">
+                <MudSelectItem Value="Gravite.Faible">Faible</MudSelectItem>
+                <MudSelectItem Value="Gravite.Modere">Modéré</MudSelectItem>
+                <MudSelectItem Value="Gravite.Important">Important</MudSelectItem>
+                <MudSelectItem Value="Gravite.Critique">Critique</MudSelectItem>
+            </MudSelect>
+            <MudNumericField T="decimal" Label="Fréquence (occurrences/mois)" @bind-Value="_frequence" Min="0" Class="mb-3" />
+            <MudNumericField T="decimal" Label="Impact temps (heures/mois)" @bind-Value="_impactTemps" Min="0" Class="mb-3" />
+            <MudNumericField T="decimal?" Label="Coût estimé (optionnel)" @bind-Value="_coutEstime" Min="0" Class="mb-3" />
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Score = Fréquence × Impact temps = @((_frequence * _impactTemps).ToString("0.##"))
+            </MudText>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@Annuler">Annuler</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@_enCours" OnClick="@EnregistrerAsync">
+            @(_enCours ? "Enregistrement..." : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProjetId { get; set; }
+
+    private MudForm? _form;
+    private string _description = string.Empty;
+    private Gravite _gravite = Gravite.Modere;
+    private decimal _frequence;
+    private decimal _impactTemps;
+    private decimal? _coutEstime;
+    private bool _enCours;
+
+    private async Task EnregistrerAsync()
+    {
+        if (_form is null)
+        {
+            return;
+        }
+
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertProblemeDto(_description, _gravite, _frequence, _impactTemps, _coutEstime);
+        var resultat = await DomaineApi.CreerProblemeAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (resultat is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Annuler() => MudDialog.Cancel();
+}
