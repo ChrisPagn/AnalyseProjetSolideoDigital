@@ -5,6 +5,7 @@ using Api.Validators;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Components.WebAssembly.Server;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
@@ -35,6 +36,17 @@ if (builder.Environment.IsDevelopment())
             .AllowAnyMethod()
             .AllowCredentials());
     });
+}
+
+// Clés Data Protection persistées hors Development : par défaut, ASP.NET Core les garde en
+// mémoire — perdues à chaque redémarrage/rebuild du conteneur, ce qui invaliderait tous les
+// cookies de session existants et déconnecterait l'utilisateur à chaque déploiement. Le dossier
+// /app/data est le même volume que la base SQLite (déjà persistant, déjà sauvegardé).
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddDataProtection()
+        .SetApplicationName("AnalyseProjetSolideoDigital")
+        .PersistKeysToFileSystem(new DirectoryInfo("/app/data/keys"));
 }
 
 // Base de données : SQLite en dev, MySQL en prod (Pomelo) — sélection via configuration,
@@ -99,10 +111,15 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
         // sur toute requête cross-origin même avec CORS + credentials activés.
         options.Cookie.SameSite = builder.Environment.IsDevelopment() ? SameSiteMode.Lax : SameSiteMode.Strict;
 
-        // SameAsRequest (pas Always) : le cookie est marqué Secure dès que la requête est HTTPS
-        // (le cas en production, derrière Caddy — Prompt Maître 7.5), mais reste utilisable en
-        // dev local et dans les tests d'intégration qui tournent en HTTP simple (TestServer).
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        // Always hors Development : l'outil est exposé publiquement en production, le cookie
+        // doit toujours être marqué Secure (Prompt Maître 7.5) — avec ForwardedHeaders configuré
+        // ci-dessous, Request.Scheme vaut "https" pour toute requête ayant traversé Caddy, donc
+        // Always ne bloque rien en usage normal. SameAsRequest en dev/tests : Client (5138) et
+        // Api (5118) tournent en HTTP simple en local, et les tests d'intégration utilisent
+        // TestServer (également HTTP) — Always y empêcherait le cookie d'être posé.
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
 
@@ -162,12 +179,24 @@ else
 }
 
 // Caddy termine le TLS et transmet en HTTP en interne au conteneur app (Prompt Maître 7.3) :
-// sans ceci, l'Api croirait que toutes les requêtes sont en HTTP et ne marquerait jamais le
-// cookie Identity comme Secure en production (CookieSecurePolicy.SameAsRequest ci-dessus).
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// sans ceci, Request.Scheme resterait "http" côté Api même pour une requête HTTPS côté client,
+// et app.UseHttpsRedirection() ci-dessous redirigerait en boucle au lieu de laisser passer.
+//
+// KnownNetworks/KnownProxies vidés : Caddy tourne dans un autre conteneur (réseau Docker
+// externe "web", IP non fixe), pas sur localhost — avec les valeurs par défaut d'ASP.NET Core
+// (qui n'acceptent que le loopback), les en-têtes X-Forwarded-* seraient silencieusement
+// ignorés : le cookie ne serait jamais marqué Secure et le rate limiting sur /api/auth/login
+// verrait l'IP de Caddy pour toutes les requêtes au lieu de l'IP réelle du client. C'est sûr de
+// faire confiance à n'importe quel expéditeur ici uniquement parce que le port 8080 du conteneur
+// n'est jamais publié sur l'hôte (pas de ports: dans docker-compose.yml) : Caddy est la seule
+// entrée possible vers ce service sur le réseau "web".
+var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+};
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 app.UseHttpsRedirection();
 

@@ -1,142 +1,168 @@
 # Déploiement sur home server
 
-Guide pour héberger AnalyseProjetSolideoDigital sur un serveur personnel, accessible depuis
-Internet via un nom de domaine avec HTTPS automatique.
+Guide pour héberger AnalyseProjetSolideoDigital sur le home server existant, qui a déjà :
+Docker + Compose, un conteneur `caddy` unique servant tous les sites (réseau Docker externe
+`web`), CrowdSec sur l'hôte (`127.0.0.1:8080`), et la convention `~/docker/<projet>/` avec
+`docker-compose.yml`, `container_name` explicite et bind mounts.
 
-Architecture : un conteneur `app` (Api + fichiers statiques du Client compilés dedans, un seul
-port 8080 interne) derrière un conteneur `caddy` qui fait office de reverse proxy et gère les
-certificats TLS (Let's Encrypt) automatiquement.
+Ce projet **ne fait pas tourner son propre Caddy** : un seul conteneur (`analyseprojet-app`)
+rejoint le réseau `web` existant, sans aucun port publié sur l'hôte — le Caddy déjà en place
+route vers lui par nom de conteneur.
 
-## 1. Prérequis sur le serveur
-
-- Docker Engine + le plugin Docker Compose (`docker compose`, pas l'ancien `docker-compose`
-  autonome — les commandes ci-dessous utilisent la syntaxe moderne)
-- Les ports **80** et **443** libres et redirigés vers le serveur depuis votre box/routeur
-  (port forwarding) si le serveur est derrière un NAT domestique
-- Un nom de domaine qui pointe vers l'IP publique de votre connexion
+## 1. Préparer le dossier sur le serveur
 
 ```bash
-# Installer Docker (Debian/Ubuntu) si ce n'est pas déjà fait
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-# Se déconnecter/reconnecter (ou `newgrp docker`) pour que l'appartenance au groupe prenne effet
+mkdir -p ~/docker/analyseprojet
+cd ~/docker/analyseprojet
+git clone https://github.com/ChrisPagn/AnalyseProjetSolideoDigital.git .
 ```
 
-## 2. Nom de domaine (DuckDNS)
-
-Le `Caddyfile` du dépôt pointe déjà vers un sous-domaine DuckDNS :
-`analyseprojetsolideodigital.solideodigital.duckdns.org`. Si vous utilisez ce domaine :
-
-1. Créez un compte sur [duckdns.org](https://www.duckdns.org) et ajoutez le sous-domaine
-   `analyseprojetsolideodigital` (ou adaptez le `Caddyfile` si vous préférez un autre nom).
-2. Faites pointer ce sous-domaine vers l'IP publique de votre connexion domestique.
-3. Comme cette IP change probablement (IP dynamique), installez un petit script/cron qui met à
-   jour l'enregistrement DuckDNS périodiquement (DuckDNS fournit un script officiel très simple,
-   `duck.sh`, à lancer via cron toutes les 5 minutes).
-
-Si vous utilisez un autre nom de domaine, remplacez la première ligne du `Caddyfile` par le
-vôtre — Caddy s'occupe ensuite automatiquement d'obtenir et de renouveler le certificat HTTPS
-tant que le domaine pointe bien vers le serveur et que les ports 80/443 sont accessibles depuis
-Internet (Let's Encrypt en a besoin pour valider le domaine).
-
-## 3. Récupérer le projet sur le serveur
-
-```bash
-git clone https://github.com/ChrisPagn/AnalyseProjetSolideoDigital.git
-cd AnalyseProjetSolideoDigital
-```
-
-## 4. Configurer les secrets (`.env`)
+## 2. Configurer les secrets (`.env`)
 
 ```bash
 cp .env.example .env
 ```
 
-Éditez `.env` et renseignez :
+Éditez `.env` et renseignez `APP_DOMAIN`, `ADMINACCOUNT__EMAIL`, `ADMINACCOUNT__PASSWORD` (voir
+les commentaires du fichier — le mot de passe doit rester entre apostrophes). `.env` n'est jamais
+commité (exclu par `.gitignore`) — c'est le seul endroit où mettre de vraies valeurs sur le
+serveur. `docker-compose.yml` refuse de démarrer si l'une de ces variables manque
+(`${VAR:?message}`).
 
-- `ADMINACCOUNT__EMAIL` — votre e-mail (compte admin unique de l'application)
-- `ADMINACCOUNT__PASSWORD` — un mot de passe robuste (min. 12 caractères, au moins 1 majuscule,
-  1 chiffre, 1 caractère spécial)
+## 3. Préparer le dossier de données
 
-`.env` n'est jamais commité (exclu par `.gitignore`) — c'est le seul endroit où mettre de vraies
-valeurs sur le serveur.
+```bash
+mkdir -p ~/docker/analyseprojet/data
+sudo chown -R 1654:1654 ~/docker/analyseprojet/data
+```
 
-Par défaut, `docker-compose.yml` utilise **SQLite** avec un volume local (`./data`), ce qui
-suffit largement pour un usage interne mono-instance. Pour passer en MySQL, voir la section 7.
+`1654` est l'UID non-root sous lequel le conteneur tourne (`$APP_UID` de l'image
+`mcr.microsoft.com/dotnet/aspnet:9.0`, voir `Dockerfile`) — sans ce `chown`, l'écriture de la
+base SQLite et des clés Data Protection dans `./data` échoue au démarrage.
 
-## 5. Démarrer l'application
+## 4. Construire et démarrer
 
 ```bash
 docker compose up -d --build
-```
-
-Cela construit l'image (build .NET en multi-stage, voir `Dockerfile`), puis démarre les deux
-conteneurs (`app` et `caddy`). Le premier démarrage peut prendre quelques minutes (compilation).
-
-```bash
-# Vérifier que tout tourne
 docker compose ps
-
-# Suivre les logs (utile pour voir Caddy obtenir le certificat HTTPS la première fois)
 docker compose logs -f
 ```
 
-Une fois les logs Caddy stabilisés (plus d'activité ACME/Let's Encrypt), l'application est
-accessible à `https://votre-domaine`.
+Le service rejoint le réseau externe `web` (déjà créé par la stack Caddy). Aucun port n'est
+publié sur l'hôte — c'est un choix volontaire, pas un oubli : la seule entrée vers l'application
+est le Caddy déjà en place, et le port 8080 de l'hôte est réservé à CrowdSec.
 
-## 6. Mettre à jour l'application (nouvelle version)
+## 5. Ajouter le site au Caddy existant
+
+Le bloc à ajouter est documenté dans `Caddyfile.exemple` de ce dépôt. Ouvrez le Caddyfile réel
+(celui monté par le conteneur `caddy` existant) et collez-y ce bloc.
 
 ```bash
-cd AnalyseProjetSolideoDigital
+# Depuis le dossier qui contient le Caddyfile principal du serveur :
+
+# Valider la syntaxe avant de recharger (Caddy refuse de recharger un fichier invalide, mais
+# autant s'en assurer explicitement avant de toucher un Caddy qui sert déjà d'autres sites)
+docker exec caddy caddy validate --config /etc/caddy/Caddyfile
+
+# Recharger sans coupure des autres sites déjà servis par ce Caddy
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+DuckDNS pointe déjà vers l'IP du serveur pour ce sous-domaine — aucun nouvel enregistrement à
+créer. Caddy obtient et renouvelle le certificat Let's Encrypt automatiquement au premier accès.
+
+## 6. Mettre à jour l'application
+
+```bash
+cd ~/docker/analyseprojet
 git pull
 docker compose up -d --build
 ```
 
-Le volume `./data` (base SQLite) est préservé entre les mises à jour — seul le code applicatif
-est reconstruit.
+`./data` (base SQLite + clés Data Protection) est préservé entre les mises à jour : les sessions
+existantes restent valides après un rebuild, et les données ne sont jamais perdues par un
+déploiement.
 
-## 7. Passer à MySQL (optionnel)
+## 7. Sauvegardes
 
-Si vous préférez MySQL plutôt que SQLite (recommandé si plusieurs personnes doivent accéder à
-l'outil en même temps, SQLite gérant mal les écritures concurrentes) :
-
-1. Ajoutez un service MySQL à `docker-compose.yml` (ou pointez vers une instance MySQL déjà
-   existante sur votre serveur).
-2. Dans `.env`, remplacez la configuration SQLite par :
-   ```
-   DATABASE_PROVIDER=MySql
-   CONNECTIONSTRINGS__DEFAULTCONNECTION=Server=mysql;Database=analyseprojet;User=analyseprojet;Password=CHANGER_MOI;
-   ```
-3. Adaptez `docker-compose.yml` pour transmettre ces deux variables au service `app` (au lieu
-   des lignes `ConnectionStrings__DefaultConnection` / `DatabaseProvider` codées en dur pour
-   SQLite) et ajoutez `depends_on: mysql` sur le service `app`.
-
-## 8. Sauvegardes
-
-Avec SQLite (configuration par défaut), toute la base de données est le fichier
-`./data/analyseprojet.db` sur le serveur. Sauvegardez ce dossier régulièrement :
+**Ne jamais faire un `tar`/`cp` direct sur le fichier `.db` pendant que l'application tourne** —
+SQLite peut être en écriture au même instant, ce qui produirait une sauvegarde corrompue ou
+incohérente. Utiliser `sqlite3 .backup`, qui gère la cohérence même à chaud :
 
 ```bash
-# Exemple simple : copie datée, à planifier via cron
-tar czf "analyseprojet-backup-$(date +%Y%m%d).tar.gz" data/
+mkdir -p ~/docker/analyseprojet/backups
+sqlite3 ~/docker/analyseprojet/data/analyseprojet.db \
+  ".backup '${HOME}/docker/analyseprojet/backups/analyseprojet-$(date +%Y%m%d-%H%M).db'"
 ```
 
-## 9. Arrêter / redémarrer
+À planifier via cron (ex. une fois par jour). Pensez à purger les sauvegardes les plus anciennes
+périodiquement pour ne pas remplir le disque.
+
+## 8. Arrêter / redémarrer
 
 ```bash
-docker compose down        # arrêt (les données du volume ./data sont conservées)
+docker compose down         # arrêt (les données de ./data sont conservées)
 docker compose up -d        # redémarrage
-docker compose restart app  # redémarrer uniquement l'application, sans toucher à Caddy
+docker compose restart analyseprojet  # redémarrer uniquement ce service
+```
+
+## 9. Vérifications post-déploiement
+
+À faire une fois après le premier déploiement (et après toute modification touchant
+l'authentification ou le reverse proxy) :
+
+```bash
+# 1. Un endpoint protégé doit répondre 401 sans cookie de session — api/auth/me est
+#    volontairement public (utilisé par le Client pour savoir s'il faut rediriger vers
+#    /connexion, il répond toujours 200 avec {"estAuthentifie":false,...} sans session) ;
+#    prendre un endpoint réellement protégé comme api/projets.
+curl -sD - -o /dev/null https://analyseprojetsolideodigital.solideodigital.duckdns.org/api/projets
+#    → doit répondre 401, sans erreur TLS
+
+# 2. Rate limiting : 6 tentatives de login rapprochées depuis la même IP doivent renvoyer 429
+#    sur la 6e (politique "login" : 5 requêtes / minute / IP — voir Api/Program.cs).
+for i in $(seq 1 6); do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+    https://analyseprojetsolideodigital.solideodigital.duckdns.org/api/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"Email":"test@exemple.fr","Password":"mauvais"}'
+done
+#    → les 5 premières lignes: 400/401 (identifiants invalides), la 6e: 429
+
+# 3. La session doit survivre à un redémarrage du conteneur (preuve que les clés Data
+#    Protection sont bien persistées dans ./data/keys, pas régénérées à chaque démarrage) :
+#    connectez-vous dans le navigateur, notez l'heure, puis :
+docker compose restart analyseprojet
+#    → rafraîchir la page : toujours connecté, pas de redirection vers /connexion
 ```
 
 ## Dépannage rapide
 
-- **Le certificat HTTPS ne s'obtient pas** : vérifiez que le domaine pointe bien vers l'IP
-  publique actuelle du serveur (`dig +short votre-domaine`) et que les ports 80/443 sont bien
-  redirigés depuis votre box vers le serveur. Consultez `docker compose logs caddy`.
-- **L'application ne démarre pas** : `docker compose logs app` — les causes les plus courantes
-  sont un `.env` incomplet (mot de passe admin ne respectant pas la politique de complexité) ou
-  un conflit de port si autre chose écoute déjà sur 80/443 sur le serveur.
+- **L'application ne démarre pas** : `docker compose logs analyseprojet` — cause la plus
+  fréquente : `.env` incomplet (le compose refuse de démarrer et l'indique explicitement grâce à
+  `${VAR:?message}`), ou permissions sur `./data` (voir étape 3).
+- **429 sur toutes les requêtes / cookie jamais Secure** : signe que `X-Forwarded-For` /
+  `X-Forwarded-Proto` n'arrivent pas jusqu'à l'app, ou que `KnownNetworks`/`KnownProxies` n'ont
+  pas été vidés côté `Api/Program.cs` — vérifiez que le bloc Caddy pointe bien vers
+  `analyseprojet-app:8080` et que les deux conteneurs sont sur le réseau `web`.
 - **Connexion admin refusée** : le compte admin n'est créé qu'au tout premier démarrage à partir
-  des valeurs de `.env` ; si vous les changez après coup, il faut modifier le mot de passe depuis
-  l'application elle-même ou réinitialiser la base.
+  des valeurs de `.env` ; les changer après coup ne met pas à jour le compte existant — il faut
+  changer le mot de passe depuis l'application elle-même.
+- **Site injoignable alors que le conteneur tourne** : vérifiez que le bloc a bien été ajouté au
+  Caddyfile principal (pas seulement à `Caddyfile.exemple`, qui n'est jamais monté) et que
+  `caddy reload` n'a pas renvoyé d'erreur.
+
+## Test local (sans toucher au serveur)
+
+`docker-compose.local.yml` permet de builder et tester l'image sur votre poste de développement,
+en dehors de tout Caddy :
+
+```bash
+docker network create web  # si le réseau n'existe pas déjà en local
+docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/api/auth/me
+```
+
+Le port n'est publié que sur `127.0.0.1` — ce fichier ne doit jamais être utilisé sur le home
+server (le port 8080 de l'hôte y est réservé à CrowdSec).

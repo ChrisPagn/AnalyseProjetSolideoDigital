@@ -1,0 +1,17 @@
+# Override pour tester l'image en local, en dehors du réseau "web" du home server.
+# Usage : docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+#
+# Publie le port sur 127.0.0.1 uniquement (jamais 0.0.0.0) — ce fichier ne doit jamais être
+# utilisé sur le home server : le port 8080 y est réservé à CrowdSec (127.0.0.1:8080).
+services:
+  analyseprojet:
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - default
+      - web
+
+networks:
+  default: {}
+  web:
+    external: true

@@ -738,3 +738,121 @@ Voir `git log` / `git status` — en attente de validation de l'étape par l'uti
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Adaptation déploiement au home server réel (2026-09-18)
+
+### Contenu réalisé
+Les fichiers de déploiement (créés à l'étape précédente) supposaient un serveur vierge avec son
+propre Caddy. Le home server réel a déjà : Docker + Compose, un conteneur `caddy` unique servant
+tous les sites (réseau Docker externe `web`), CrowdSec sur l'hôte (`127.0.0.1:8080`), et la
+convention `~/docker/<projet>/` avec bind mounts. Adaptation complète à cette configuration
+existante, sans toucher à la logique métier.
+
+- `docker-compose.yml` : suppression du service `caddy` et du volume nommé `caddy_data` — plus
+  aucun Caddy propre à ce projet. Service renommé `analyseprojet` (container_name
+  `analyseprojet-app`), rattaché au réseau externe `web`, **aucun port publié** sur l'hôte (le
+  conteneur `caddy` existant y accède par nom sur le réseau partagé ; le port 8080 de l'hôte est
+  réservé à CrowdSec). `mem_limit: 768m`. Variables obligatoires via `${VAR:?message}`
+  (`APP_DOMAIN`, `ADMINACCOUNT__EMAIL`, `ADMINACCOUNT__PASSWORD`) : le compose refuse de démarrer
+  plutôt que de démarrer silencieusement avec une valeur vide. Les variables
+  `DATABASE_PROVIDER`/`CONNECTIONSTRINGS__DEFAULTCONNECTION` retirées : déjà fixées en dur pour
+  SQLite dans `Api/appsettings.json`, elles étaient redondantes.
+- `Caddyfile` renommé `Caddyfile.exemple` : documente le bloc à coller dans le Caddyfile du home
+  server (pas monté automatiquement, ce projet n'a plus de conteneur Caddy à lui). Bloc avec
+  `encode zstd gzip`, en-têtes `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `reverse_proxy analyseprojet-app:8080`.
+- `Dockerfile` : restore NuGet isolé dans une couche séparée du code (copie des `.csproj` seuls,
+  `dotnet restore`, puis copie du reste et `publish --no-restore`) — accélère les rebuilds
+  répétés, la couche de restore ne se réinvalide que si un `.csproj` change.
+  `ASPNETCORE_HTTP_PORTS=8080` explicite, `USER $APP_UID` dans l'image finale (non-root, UID 1654
+  standard de l'image `aspnet:9.0`).
+- `.dockerignore` ajouté (`bin/`, `obj/`, `.git/`, `.env`, `data/`, `*.db*`, `docs/`,
+  `Api.Tests/`, `.vs/`, `.vscode/`).
+- `Api/Program.cs`, trois changements ciblés :
+  1. **ForwardedHeaders** : `KnownNetworks`/`KnownProxies` vidés. Caddy tourne dans un autre
+     conteneur (réseau `web`, IP non fixe) — les valeurs par défaut d'ASP.NET Core n'acceptent
+     que le loopback et auraient silencieusement ignoré `X-Forwarded-For`/`X-Forwarded-Proto` :
+     le cookie ne serait jamais marqué `Secure`, et le rate limiting sur `/api/auth/login`
+     verrait l'IP de Caddy pour toutes les requêtes au lieu de l'IP réelle du client. Sûr
+     uniquement parce que le port 8080 du conteneur n'est jamais publié sur l'hôte (vérifié en
+     Docker local : `curl` direct sur `127.0.0.1:8080` avec `X-Forwarded-Proto` falsifié n'est
+     possible que parce qu'on est déjà dans le réseau interne — sur le vrai serveur, Caddy est la
+     seule porte d'entrée).
+  2. **Cookie SecurePolicy** : `Always` hors `Development` (au lieu de `SameAsRequest`) — l'outil
+     est exposé publiquement, le cookie doit toujours être `Secure`. `SameAsRequest` conservé en
+     `Development`/tests (Client, Api et `WebApplicationFactory` tournent en HTTP simple).
+  3. **Data Protection** : clés persistées dans `/app/data/keys` (même volume bind-mounté que la
+     base SQLite, donc déjà sauvegardé) hors `Development`, avec `SetApplicationName`. Sans ça,
+     les clés par défaut restent en mémoire et sont régénérées à chaque redémarrage du conteneur
+     — tous les cookies de session existants deviendraient invalides à chaque déploiement.
+     **Vérifié en Docker local** : cookie de session obtenu avant `docker restart`, réutilisé
+     après redémarrage → toujours accepté (200 sur un endpoint protégé), confirmant que les clés
+     survivent bien au redémarrage.
+- `.env.example` : `DATABASE_PROVIDER`/`CONNECTIONSTRINGS__DEFAULTCONNECTION` retirés (inutilisés
+  désormais), `APP_DOMAIN` ajouté, mot de passe admin entre apostrophes avec commentaire
+  expliquant pourquoi (Compose interprète `$` dans un `.env`, un mot de passe qui en contiendrait
+  un serait tronqué sans les apostrophes).
+- `docker-compose.local.yml` ajouté : override publiant `127.0.0.1:8080:8080` pour tester l'image
+  en local en dehors du réseau `web` du serveur — jamais destiné à être utilisé sur le home
+  server (port 8080 réservé à CrowdSec).
+- `DEPLOIEMENT.md` entièrement réécrit pour ce contexte : dossier `~/docker/analyseprojet/`,
+  `chown -R 1654:1654 ./data` (UID non-root de l'image), démarrage sans Caddy dédié, ajout du
+  bloc au Caddyfile existant (`caddy validate` puis `caddy reload`, sans coupure des autres
+  sites), sauvegarde via `sqlite3 .backup` (jamais un `tar`/`cp` direct sur le `.db` pendant que
+  l'app tourne — risque de sauvegarde incohérente), section de vérifications post-déploiement
+  (cookie `Secure`/`HttpOnly`/`SameSite=Strict`, 429 après 5 logins/min depuis une même IP,
+  session conservée après `docker compose restart`).
+
+### Bug évité — `/api/auth/me` n'est pas le bon endpoint pour vérifier le 401
+La demande initiale proposait de vérifier `curl .../api/auth/me` → 401 comme preuve qu'un visiteur
+non connecté est bien rejeté. En lisant `Api/Controllers/AuthController.cs`, `Me()` n'a
+volontairement **aucun** `[Authorize]` : c'est un endpoint public par design, utilisé par le
+Client pour savoir s'il doit rediriger vers `/connexion`, et il répond toujours `200` avec
+`{"estAuthentifie":false,"email":null}` en l'absence de session — jamais 401. Ce n'est pas un bug,
+c'est le comportement voulu (vérifié en le laissant tel quel, aucune modification de la logique
+métier). `DEPLOIEMENT.md` vérifie plutôt `api/projets` (réellement protégé par `[Authorize]`),
+confirmé répondre 401 sans cookie dans le test Docker local.
+
+### Vérifications effectuées
+- `dotnet build` : 0 erreur, 0 warning sur l'ensemble de la solution après les changements
+  `Program.cs`.
+- `dotnet test Api.Tests/Api.Tests.csproj` : 125/125 toujours verts (aucune régression — les
+  tests tournent en `Development`, donc `CookieSecurePolicy.SameAsRequest` et le comportement
+  Data Protection par défaut restent inchangés pour eux).
+- `docker compose -f docker-compose.yml -f docker-compose.local.yml up --build` testé en local
+  (réseau `web` créé manuellement pour l'occasion, port de test temporairement déporté sur cette
+  machine de dev à cause d'un conflit local avec un autre conteneur déjà sur 8080 — n'affecte pas
+  le comportement réel sur le home server, où ce port est libre pour ce projet) :
+  - Build multi-stage réussi, démarrage propre, compte admin créé automatiquement.
+  - `/` → 200, HTML correct.
+  - `/api/projets` (protégé) → 401 sans cookie, 200 avec un cookie de session valide.
+  - `AllowedHosts` fonctionne : requête avec un `Host` différent de `APP_DOMAIN` → 400 (protection
+    Host header injection).
+  - Login → cookie `Secure; HttpOnly; SameSite=Strict` correctement posé.
+  - Rate limiting sur `/api/auth/login` → 429 après 5 tentatives en une minute depuis la même IP
+    (déclenché involontairement pendant les tests manuels, bonne confirmation que la politique
+    fonctionne).
+  - Session testée avant/après `docker restart` avec le même cookie → toujours acceptée après
+    redémarrage (clés Data Protection bien persistées dans `/app/data/keys`).
+  - Environnement de test local nettoyé après coup (conteneurs, réseau `web` local, `.env` et
+    `data/` de test supprimés — rien de ceci ne doit se retrouver dans le dépôt).
+
+### Décisions d'architecture prises
+- Pas de second Caddy pour ce projet : un seul reverse proxy sur le serveur, partagé par tous les
+  sites — cohérent avec la convention déjà en place plutôt qu'avec l'hypothèse initiale (serveur
+  vierge) du guide de déploiement précédent.
+- Aucun port publié sur l'hôte pour le service applicatif : la seule voie d'accès passe par le
+  réseau Docker `web` et le Caddy existant, ce qui simplifie la surface exposée et évite tout
+  conflit avec CrowdSec sur `127.0.0.1:8080`.
+
+### Problèmes connus / points ouverts
+- Rien n'a été commité par cette session de travail : l'utilisateur valide d'abord, conformément
+  à sa demande explicite. `git status` montre les fichiers modifiés/renommés/ajoutés en attente.
+- Le point d'étapes précédentes sur MySQL (section "Passer à MySQL" de l'ancien
+  `DEPLOIEMENT.md`) a été retiré de la réécriture : hors périmètre de cette demande (SQLite
+  confirmé suffisant pour un usage mono-utilisateur), à rajouter séparément si besoin un jour.
+
+### Fichiers créés/modifiés
+`docker-compose.yml`, `Caddyfile` → `Caddyfile.exemple`, `Dockerfile`, `.dockerignore` (nouveau),
+`Api/Program.cs`, `.env.example`, `docker-compose.local.yml` (nouveau), `DEPLOIEMENT.md`. Voir
+`git status` — en attente de validation de l'utilisateur avant commit.

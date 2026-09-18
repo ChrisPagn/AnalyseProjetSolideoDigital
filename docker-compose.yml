@@ -1,27 +1,19 @@
 services:
-  app:
+  analyseprojet:
     build: .
+    container_name: analyseprojet-app
     restart: unless-stopped
+    mem_limit: 768m
+    networks:
+      - web
     volumes:
-      - ./data:/app/data # persistance SQLite
+      - ./data:/app/data # persistance SQLite + clés Data Protection
     environment:
-      - ConnectionStrings__DefaultConnection=Data Source=/app/data/analyseprojet.db
-      - DatabaseProvider=Sqlite
       - ASPNETCORE_ENVIRONMENT=Production
-      - AdminAccount__Email=${ADMINACCOUNT__EMAIL}
-      - AdminAccount__Password=${ADMINACCOUNT__PASSWORD}
+      - AllowedHosts=${APP_DOMAIN:?APP_DOMAIN manquant dans .env}
+      - AdminAccount__Email=${ADMINACCOUNT__EMAIL:?ADMINACCOUNT__EMAIL manquant dans .env}
+      - AdminAccount__Password=${ADMINACCOUNT__PASSWORD:?ADMINACCOUNT__PASSWORD manquant dans .env}
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-    depends_on:
-      - app
-
-volumes:
-  caddy_data:
+networks:
+  web:
+    external: true

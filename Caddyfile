@@ -1,3 +1,0 @@
-analyseprojetsolideodigital.solideodigital.duckdns.org {
-	reverse_proxy app:8080
-}

@@ -1,0 +1,21 @@
+# Ce projet ne fait PAS tourner son propre Caddy : le home server en a déjà un (conteneur
+# `caddy`, réseau `web`) qui gère déjà tous les autres sites. Ce fichier n'est donc pas monté
+# tel quel — il documente le bloc à ajouter au Caddyfile existant sur le serveur.
+#
+# 1. Ajouter ce bloc dans le Caddyfile principal (celui monté par le conteneur `caddy` existant).
+# 2. Le conteneur `analyseprojet-app` doit être sur le même réseau externe `web` que Caddy
+#    (voir docker-compose.yml) — Caddy le résout par son container_name, pas de port publié.
+# 3. Valider puis recharger sans coupure : voir DEPLOIEMENT.md.
+
+analyseprojetsolideodigital.solideodigital.duckdns.org {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+	}
+
+	reverse_proxy analyseprojet-app:8080
+}
