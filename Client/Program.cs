@@ -27,6 +27,7 @@ builder.Services.AddScoped<ProjetsApiClient>();
 builder.Services.AddScoped<PhasesApiClient>();
 builder.Services.AddScoped<RegistresApiClient>();
 builder.Services.AddScoped<DomaineApiClient>();
+builder.Services.AddScoped<TracabiliteApiClient>();
 builder.Services.AddScoped<CookieAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<CookieAuthenticationStateProvider>());
 builder.Services.AddAuthorizationCore();

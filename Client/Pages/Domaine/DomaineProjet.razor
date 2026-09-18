@@ -18,6 +18,8 @@ else
         <MudChip T="string" Color="@CouleurMaturite(_projet.NiveauMaturite)">@LibelleMaturite(_projet.NiveauMaturite)</MudChip>
     </MudStack>
 
+    <BandeauAlertesTracabilite ProjetId="@ProjetId" />
+
     <MudPaper Class="pa-4" Elevation="1">
         <MudTabs>
             <MudTabPanel Text="Problèmes">

@@ -1,0 +1,56 @@
+@inject TracabiliteApiClient TracabiliteApi
+@inject ISnackbar Snackbar
+
+@* Alertes visuelles de traçabilité (Prompt Maître 4.3, étape 8) : liens structurels manquants
+   (orphelins) affichés en continu, contradictions détectées à la demande. *@
+@if (_alertes is { Count: > 0 })
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
+        <MudText Typo="Typo.body2" Class="mb-1">
+            <b>@_alertes.Count</b> alerte(s) de traçabilité :
+        </MudText>
+        @foreach (var alerte in _alertes)
+        {
+            <MudText Typo="Typo.body2">• @alerte.Message</MudText>
+        }
+    </MudAlert>
+}
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-4">
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.FindInPage"
+               Disabled="@_enCours" OnClick="@DetecterContradictionsAsync">
+        @(_enCours ? "Analyse en cours..." : "Détecter les contradictions")
+    </MudButton>
+</MudStack>
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private IReadOnlyList<AlerteTracabiliteDto>? _alertes;
+    private bool _enCours;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAlertesAsync();
+    }
+
+    private async Task ChargerAlertesAsync()
+    {
+        _alertes = await TracabiliteApi.GetAlertesAsync(ProjetId);
+    }
+
+    private async Task DetecterContradictionsAsync()
+    {
+        _enCours = true;
+        var contradictions = await TracabiliteApi.DetecterContradictionsAsync(ProjetId);
+        _enCours = false;
+
+        Snackbar.Add(
+            contradictions.Count == 0
+                ? "Aucune contradiction détectée."
+                : $"{contradictions.Count} contradiction(s) détectée(s) — une question de relance a été créée pour chacune.",
+            contradictions.Count == 0 ? Severity.Success : Severity.Warning);
+
+        await ChargerAlertesAsync();
+    }
+}

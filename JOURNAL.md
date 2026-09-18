@@ -439,3 +439,56 @@ Voir `git log` / `git status` — en attente de validation de l'étape par l'uti
 
 ### Fichiers créés/modifiés
 Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
+
+## Étape 8 — Traçabilité (2026-09-18)
+
+### Contenu réalisé
+- Deux décisions de conception validées avec l'utilisateur avant de coder :
+  1. Cas 1 de contradiction (Demande Phase 02 vs Problème quantifié Phase 04) détecté par une
+     règle **structurelle simple** (la Demande — `InformationRegistre` créée par la question
+     guidée de l'étape 7 — est Validée mais aucun `Probleme` du projet n'a de `ScoreCalcule > 0`),
+     pas par une comparaison sémantique du texte, hors de portée d'un outil de gestion classique.
+  2. Cas 2 (informations contradictoires) détecté par normalisation simple du libellé (casse et
+     espaces ignorés) + comparaison texte des valeurs après `Trim()`, sans détection de synonymes
+     ni de similarité.
+- `Api/Services/TracabiliteService` : formalise en service dédié la détection d'orphelins
+  (Fonctionnalité sans lien, Problème non couvert) déjà calculée de façon dupliquée dans
+  `MaturiteCalculatorService` et les controllers depuis l'étape 6 — lecture seule, ne modifie rien.
+- `Api/Services/ContradictionDetectorService` : couvre les 3 cas du Prompt Maître 4.3 — (1)
+  Demande validée sans Problème quantifié (génère une `QuestionRegistre` **Bloquante**), (2) deux
+  `InformationRegistre` au même libellé normalisé avec des valeurs différentes (génère une
+  question Normale par groupe en contradiction), (3) `EtapeProcessus.ExempleValide = false` alors
+  que la Phase 03 est Terminee (une question par étape non validée). Génération **idempotente** :
+  une question ouverte avec un texte identique n'est jamais dupliquée en cas d'appels répétés.
+  Référence directement `QuestionsGuideesParPhase` (Shared, étape 7) pour identifier le libellé
+  exact de la question "Demande", plutôt que de dupliquer ce texte en dur dans l'Api.
+- `Api/Controllers/TracabiliteController` (`[Authorize]`) : `GET .../tracabilite/alertes` (lecture
+  seule), `POST .../tracabilite/detecter-contradictions` (déclenche la détection + génère les
+  relances + recalcule `NiveauMaturite` si une question Bloquante a été créée).
+- Client Blazor : `TracabiliteApiClient`, composant `BandeauAlertesTracabilite.razor` — alertes
+  visuelles affichées en continu en haut de la page Domaine analysé (étape 6), bouton "Détecter
+  les contradictions" déclenchant l'analyse à la demande avec confirmation du nombre de
+  contradictions trouvées.
+- Tests xUnit : `TracabiliteServiceTests` (orphelins détectés/non détectés selon les liens),
+  `ContradictionDetectorServiceTests` (13 tests couvrant les 3 cas — détecté/non détecté pour
+  chacun, non-duplication sur appel répété), `TracabiliteControllerTests` (alertes via HTTP, effet
+  réel d'une contradiction sur `NiveauMaturite` via l'API complète, non-duplication via HTTP).
+  95/95 tests passent au total (77 hérités des étapes 1-7 + 18 nouveaux).
+- Flux vérifié dans un vrai navigateur : création d'une Fonctionnalité orpheline → alerte affichée
+  automatiquement sur la page Domaine ; création d'une Demande validée sans Problème → clic sur
+  "Détecter les contradictions" → confirmation "1 contradiction détectée" → vérification que la
+  `QuestionRegistre` de relance a bien été créée avec l'importance Bloquante attendue.
+
+### Décisions d'architecture prises
+- Voir les 2 décisions validées avec l'utilisateur en tête de section.
+- Idempotence de la génération des questions de relance assurée par une simple vérification
+  d'existence (même texte, statut Ouverte) avant insertion — pas de nouveau champ ajouté au modèle
+  de données (ex. "généré automatiquement") pour cette seule fonctionnalité, jugé disproportionné.
+
+### Problèmes connus / points ouverts
+- Aucun nouveau bug détecté cette fois.
+- Les points des étapes 1-7 (noms de phases 5-18 provisoires, seuils `NiveauParPhases` des Blocs
+  B/C/D non fixés, 2FA/CrowdSec hors périmètre code V1) restent valables.
+
+### Fichiers créés/modifiés
+Voir `git log` / `git status` — en attente de validation de l'étape par l'utilisateur avant commit.
