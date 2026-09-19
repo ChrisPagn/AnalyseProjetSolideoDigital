@@ -1196,3 +1196,49 @@ Lot le plus structurant après le Lot B : corrige la définition de "Fonctionnal
 `Client/Pages/Entretien/ModeEntretien.razor`, `Api/Actions/CreateProjetAction.cs`,
 `Api/Data/DbSeeder.cs`, `Api.Tests/Controllers/DomaineControllerTests.cs`. Voir `git status` — en
 attente de validation de l'utilisateur avant commit.
+
+## Extension du Mode Entretien aux Phases 03-18 — Lot E : Contraintes/Règles/Intégrations/Exigences NF/Planning (2026-09-19)
+
+### Contenu réalisé
+Lot le plus léger depuis le Lot C-bis : les Phases 10, 11, 12, 13 et 15 réutilisent strictement
+le mécanisme déjà en place pour les Phases 01/02 (`QuestionGuidee` → `InformationRegistre`, via
+`EntretienQuestionGuidee.razor` existant) — aucune entité nouvelle, aucune migration, aucun
+nouveau composant Blazor.
+
+- `Shared/ModeEntretien/QuestionGuidee.cs` étendu avec 5 nouvelles listes de questions
+  (`Phase10Contraintes`, `Phase11ReglesMetier`, `Phase12Integrations`,
+  `Phase13ExigencesNonFonctionnelles`, `Phase15Planning`), directement tirées du document de
+  référence, et `PourPhase` mis à jour pour les exposer.
+- **`ModeEntretien.razor` n'a nécessité aucune modification** : le routage vers
+  `EntretienQuestionGuidee` est déjà conditionné par `_questions is not null`, calculé via
+  `QuestionsGuideesParPhase.PourPhase(numero)` — dès que ces phases ont des questions définies,
+  elles sont automatiquement prises en charge par le flux existant. Confirmé par l'analyse avant
+  de coder, conforme à ce que prévoyait le document ("aucun nouveau composant").
+- Noms de phases 10, 11, 12, 15 mis à jour (retrait de "(provisoire)"). Phase 13 renommée
+  "Exigences non-fonctionnelles" (nom définitif du document v2, différent du nom provisoire
+  "Non-fonctionnel").
+- **Aucun nouveau test xUnit** : `QuestionsGuideesParPhase` n'a pas de logique testable au-delà
+  de ce que couvrent déjà les tests d'intégration existants sur `InformationsRegistreController`
+  (création/lecture d'InformationRegistre) — 139/139 toujours verts sans ajout.
+- Flux vérifié dans un vrai navigateur (Chrome headless + CDP) sur les 5 phases : titre correct,
+  question 1 affichée avec le bon libellé, réponse saisie, validation, progression vers la
+  question suivante (confirmé en détail sur la Phase 11 : `1/3` → `2/3`, InformationRegistre
+  créée avec `Statut: Valide`, code `INF-001` auto-incrémenté). Aucune erreur console sur aucune
+  des 5 phases. Données de test nettoyées après vérification.
+
+### Décisions d'architecture prises
+- Aucune nouvelle décision structurante : ce lot confirme que le mécanisme `QuestionGuidee` posé
+  dès les Phases 01/02 généralise proprement à de nouvelles phases par simple ajout de données
+  (une liste de `QuestionGuidee`), sans toucher au code du flux lui-même — la séparation
+  contenu/mécanique validée dès le début du Mode Entretien tient sur la durée.
+
+### Problèmes connus / points ouverts
+- Lots F à H restent à implémenter (14 Priorisation MVP, 16 Synthèse/17 Validation, 18) — voir
+  `docs/03-proposition-phases-05-18-v2.md`. Une fois ces 3 lots faits, les 18 phases seront
+  toutes couvertes par le Mode Entretien.
+- Rien n'a encore été commité pour ce lot — voir `git status`.
+
+### Fichiers créés/modifiés
+`Shared/ModeEntretien/QuestionGuidee.cs`, `Api/Actions/CreateProjetAction.cs`,
+`Api/Data/DbSeeder.cs`. Voir `git status` — en attente de validation de l'utilisateur avant
+commit.
