@@ -1122,3 +1122,77 @@ document, remplaçant l'ancien "point ouvert").
 `Client/Pages/Entretien/EntretienProblemes.razor` (nouveau),
 `Client/Pages/Entretien/ModeEntretien.razor`, `docs/03-proposition-phases-05-18-v2.md`. Voir
 `git status` — en attente de validation de l'utilisateur avant commit.
+
+## Extension du Mode Entretien aux Phases 03-18 — Lot D : Fonctionnalités + Automatisations (2026-09-19)
+
+### Contenu réalisé
+Lot le plus structurant après le Lot B : corrige la définition de "Fonctionnalité orpheline"
+(anomalie v1) et introduit `PrioriteMoSCoW.NonArbitree`.
+
+- **`PrioriteMoSCoW.NonArbitree`** ajoutée (première valeur de l'enum, donc valeur par défaut
+  implicite de `Fonctionnalite.Priorite`, rendue explicite dans l'entité). Stockage en
+  `HasConversion<string>` déjà en place : aucun risque de décalage des valeurs existantes en
+  base pour une insertion en tête d'un enum stocké en texte (contrairement à un stockage en int).
+- **Extension de `LienTracabilite`** : nouveau champ optionnel `InformationRegistreId` (FK vers
+  `InformationRegistre`, cascade), contrainte CHECK "au moins un lien" étendue à 5 colonnes.
+  Corrige la définition de "Fonctionnalité orpheline" de la v1 (un `CritereAcceptation` seul
+  suffisait à l'éviter, ce qui rendait la règle inopérante) : une Fonctionnalite peut désormais
+  être couverte par un Probleme, une Entite, **ou une InformationRegistre** (Contrainte/Règle/
+  Exigence NF), pour les fonctionnalités transversales (authentification, audit...) qui ne
+  répondent à aucun problème client direct. Migration `ExtendLienTracabiliteEtPrioriteMoSCoW`.
+- **Bonne surprise, confirmée par l'analyse avant de coder** : `TracabiliteService`
+  (détection d'orphelins) et `MaturiteCalculatorService` (plafond de maturité) testent déjà
+  `LiensTracabilite.Count == 0`, sans condition sur le type de lien — aucune modification requise
+  dans ces deux services pour que l'extension soit prise en compte. Même schéma que
+  `ContradictionDetectorService` au Lot B : étendre le modèle de données a suffi.
+- `LiensTracabiliteController`/`LienTracabiliteDto`/`CreerLienTracabiliteDto` étendus pour
+  exposer/accepter `InformationRegistreId`.
+- **Phase 08 (Fonctionnalités)** : `EntretienFonctionnalites.razor` — liste des Problèmes non
+  couverts affichée en alerte, création d'une Fonctionnalite (Priorite toujours `NonArbitree`,
+  pas demandée à ce stade — tranchée en Phase 14), sélection d'un Probleme ou d'une Entite à
+  couvrir (crée le `LienTracabilite` dans la foulée), chip Orpheline/Couverte, panneau
+  d'ajout de critère Given/When/Then par fonctionnalité.
+- **Phase 09 (Automatisations)** : `EntretienAutomatisations.razor` — création d'Automatisation
+  (Declencheur, Condition, Action, ValidationHumaine), bandeau rappelant le critère de bascule
+  Fonctionnalité vs Automatisation ("quelqu'un doit-il décider à chaque fois, ou ça part seul ?").
+- Noms de phases 8/9 mis à jour (retrait de "(provisoire)").
+- **Bug trouvé et corrigé avant commit, via le test navigateur** : `EntretienFonctionnalites.razor`
+  utilisait `@bind-Value="_given[fonctionnalite.Id]"` (indexeur `Dictionary` en lecture) pour le
+  panneau Given/When/Then — crash `KeyNotFoundException` dès qu'on dépliait le panneau d'une
+  fonctionnalité nouvellement créée (clé absente du dictionnaire). Corrigé en séparant
+  `Value`/`ValueChanged` avec une méthode `ObtenirBrouillon` (`GetValueOrDefault`) plutôt que
+  l'indexeur direct. Reproduit et vérifié corrigé par un test Chrome headless dédié au panneau de
+  critère, en plus du flux principal.
+- Tests xUnit : 4 nouveaux (`Creer_fonctionnalite_est_non_arbitree_par_defaut`,
+  `Lien_tracabilite_vers_information_registre_couvre_la_fonctionnalite`,
+  `Lien_tracabilite_avec_seulement_information_registre_id_est_accepte`,
+  `Creer_automatisation_avec_validation_humaine`). 139/139 tests passent au total (135 hérités +
+  4 nouveaux).
+- Flux vérifié dans un vrai navigateur (Chrome headless + CDP) : Phase 08 — création d'une
+  Fonctionnalite liée à un Probleme via le formulaire (sélection dans le menu déroulant, pas
+  seulement via l'API), confirmée "Couverte" côté UI et `estOrpheline: false` côté Api ; panneau
+  Given/When/Then testé séparément après correction du crash, critère bien créé. Phase 09 —
+  création d'une Automatisation. Aucune erreur console après correction. Données de test
+  nettoyées après vérification.
+
+### Décisions d'architecture prises
+- `InformationRegistreId` en FK simple (pas de polymorphisme supplémentaire) sur
+  `LienTracabilite` : contrairement au lien polymorphe d'InformationRegistre vers les entités du
+  domaine (Lot B, Option B), ici une seule cible possible (InformationRegistre elle-même) — une
+  FK directe suffit, pas besoin d'un discriminant de type.
+
+### Problèmes connus / points ouverts
+- Lots E à H restent à implémenter (10/11/12/13/15, 16 Synthèse/17 Validation, 14 Priorisation
+  MVP, 18) — voir `docs/03-proposition-phases-05-18-v2.md`.
+- Rien n'a encore été commité pour ce lot — voir `git status`.
+
+### Fichiers créés/modifiés
+`Shared/Enums/PrioriteMoSCoW.cs`, `Api/Data/Entities/Fonctionnalite.cs`,
+`Api/Data/Entities/LienTracabilite.cs`, `Api/Data/AnalyseProjetDbContext.cs`,
+`Api/Data/Migrations/*_ExtendLienTracabiliteEtPrioriteMoSCoW.cs` (nouveau),
+`Shared/Dtos/Domaine/LienTracabiliteDto.cs`, `Api/Controllers/LiensTracabiliteController.cs`,
+`Client/Pages/Entretien/EntretienFonctionnalites.razor` (nouveau),
+`Client/Pages/Entretien/EntretienAutomatisations.razor` (nouveau),
+`Client/Pages/Entretien/ModeEntretien.razor`, `Api/Actions/CreateProjetAction.cs`,
+`Api/Data/DbSeeder.cs`, `Api.Tests/Controllers/DomaineControllerTests.cs`. Voir `git status` — en
+attente de validation de l'utilisateur avant commit.

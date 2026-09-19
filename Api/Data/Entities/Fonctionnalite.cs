@@ -17,7 +17,12 @@ public class Fonctionnalite
 
     public required string Nom { get; set; }
     public string? Description { get; set; }
-    public PrioriteMoSCoW Priorite { get; set; }
+
+    /// <summary>
+    /// NonArbitree par défaut : la Priorite MoSCoW n'est définitivement tranchée qu'en Phase 14
+    /// (Priorisation MVP), pas à la création en Phase 08 (docs/03-proposition-phases-05-18-v2.md).
+    /// </summary>
+    public PrioriteMoSCoW Priorite { get; set; } = PrioriteMoSCoW.NonArbitree;
     public StatutFonctionnalite Statut { get; set; } = StatutFonctionnalite.Identifiee;
 
     /// <summary>

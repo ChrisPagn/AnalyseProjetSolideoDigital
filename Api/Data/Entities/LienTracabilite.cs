@@ -21,4 +21,13 @@ public class LienTracabilite
 
     public int? CritereAcceptationId { get; set; }
     public CritereAcceptation? CritereAcceptation { get; set; }
+
+    /// <summary>
+    /// Lien vers une InformationRegistre (Contrainte/Règle métier/Exigence non-fonctionnelle,
+    /// Phases 10/11/13) — couvre les fonctionnalités transversales (authentification,
+    /// sauvegarde, journal d'audit) qui ne répondent à aucun Probleme client direct mais
+    /// découlent d'une contrainte ou d'une exigence (docs/03-proposition-phases-05-18-v2.md).
+    /// </summary>
+    public int? InformationRegistreId { get; set; }
+    public InformationRegistre? InformationRegistre { get; set; }
 }

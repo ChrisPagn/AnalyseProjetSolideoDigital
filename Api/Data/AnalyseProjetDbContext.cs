@@ -276,13 +276,20 @@ public class AnalyseProjetDbContext(
                 .WithMany()
                 .HasForeignKey(l => l.CritereAcceptationId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.InformationRegistre)
+                .WithMany()
+                .HasForeignKey(l => l.InformationRegistreId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            // Au moins un des 4 liens doit être renseigné (Prompt Maître 4.1 : "liens optionnels,
-            // au moins un requis"). Portée en base, pas seulement en validation applicative,
-            // pour qu'aucun appelant futur ne puisse créer une ligne totalement orpheline.
+            // Au moins un des 5 liens doit être renseigné (Prompt Maître 4.1 : "liens optionnels,
+            // au moins un requis" — étendu à InformationRegistreId pour couvrir les
+            // fonctionnalités transversales justifiées par une Contrainte/Règle/Exigence NF,
+            // voir docs/03-proposition-phases-05-18-v2.md). Portée en base, pas seulement en
+            // validation applicative, pour qu'aucun appelant futur ne puisse créer une ligne
+            // totalement orpheline.
             e.ToTable(t => t.HasCheckConstraint(
                 "CK_LienTracabilite_AuMoinsUnLien",
-                "\"ProblemeId\" IS NOT NULL OR \"FonctionnaliteId\" IS NOT NULL OR \"EntiteId\" IS NOT NULL OR \"CritereAcceptationId\" IS NOT NULL"));
+                "\"ProblemeId\" IS NOT NULL OR \"FonctionnaliteId\" IS NOT NULL OR \"EntiteId\" IS NOT NULL OR \"CritereAcceptationId\" IS NOT NULL OR \"InformationRegistreId\" IS NOT NULL"));
         });
 
         // --- CompteurCode : génération des codes INF-xxx/Q-xxx/R-xxx/DEC-xxx (Prompt Maître 4.3) ---

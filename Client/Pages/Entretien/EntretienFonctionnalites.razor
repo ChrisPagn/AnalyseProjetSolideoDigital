@@ -1,0 +1,231 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+
+@*
+    Phase 08 — Fonctionnalités (docs/03-proposition-phases-05-18-v2.md) : traduire les problèmes
+    validés (Phase 04) en fonctionnalités concrètes. Priorite MoSCoW reste NonArbitree (tranchée
+    en Phase 14, pas ici — anomalie v1 corrigée). Chaque Fonctionnalite doit avoir un
+    LienTracabilite (Probleme ou Entite) pour ne pas être orpheline.
+*@
+<MudPaper Class="pa-6 mb-4" Elevation="2">
+    <MudText Typo="Typo.h5" Class="mb-1">Fonctionnalités</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Quelle fonctionnalité proposez-vous pour répondre à un problème identifié en Phase 04 ?
+    </MudText>
+
+    @if (_problemesNonCouverts.Any())
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            <MudText Typo="Typo.body2" Class="mb-1"><b>Problèmes pas encore couverts :</b></MudText>
+            @foreach (var probleme in _problemesNonCouverts)
+            {
+                <MudText Typo="Typo.body2">— @probleme.Description (score @probleme.ScoreCalcule)</MudText>
+            }
+        </MudAlert>
+    }
+
+    <MudForm @ref="_form">
+        <MudTextField T="string" @bind-Value="_nom" Label="Nom de la fonctionnalité"
+                       AutoFocus="true" Class="mb-4" Style="min-height:44px" Required="true" />
+        <MudTextField T="string" @bind-Value="_description" Label="Description" Lines="2" Class="mb-4" Style="min-height:44px" />
+
+        <MudSelect T="int?" @bind-Value="_acteurId" Label="Qui l'utilisera ? (Acteur, Phase 05)" Class="mb-4">
+            <MudSelectItem T="int?" Value="@((int?)null)">Non précisé</MudSelectItem>
+            @foreach (var acteur in _acteurs)
+            {
+                <MudSelectItem T="int?" Value="@acteur.Id">@acteur.Nom</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Quel problème cette fonctionnalité couvre-t-elle ? (au moins un lien requis)
+        </MudText>
+        <MudSelect T="int?" @bind-Value="_problemeId" Label="Problème couvert (Phase 04)" Class="mb-2">
+            <MudSelectItem T="int?" Value="@((int?)null)">Aucun</MudSelectItem>
+            @foreach (var probleme in _problemes)
+            {
+                <MudSelectItem T="int?" Value="@probleme.Id">@probleme.Description</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int?" @bind-Value="_entiteId" Label="Ou entité concernée (Phase 06)" Class="mb-4">
+            <MudSelectItem T="int?" Value="@((int?)null)">Aucune</MudSelectItem>
+            @foreach (var entite in _entites)
+            {
+                <MudSelectItem T="int?" Value="@entite.Id">@entite.Nom</MudSelectItem>
+            }
+        </MudSelect>
+
+        @if (_problemeId is null && _entiteId is null)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                Si aucun problème ne la justifie directement, vérifiez si elle découle d'une
+                contrainte, d'une règle métier ou d'une exigence non-fonctionnelle déjà connue —
+                sinon interrogez sa légitimité avant de l'ajouter (anti-pattern "solution avant
+                besoin").
+            </MudAlert>
+        }
+    </MudForm>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+               Disabled="@(_enCours || string.IsNullOrWhiteSpace(_nom))"
+               OnClick="@AjouterFonctionnaliteAsync" Class="mb-6" Style="min-height:44px">
+        Ajouter la fonctionnalité
+    </MudButton>
+
+    <MudDivider Class="mb-4" />
+
+    <MudText Typo="Typo.subtitle1" Class="mb-2">Fonctionnalités déjà identifiées (@_fonctionnalites.Count)</MudText>
+    @if (_fonctionnalites.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Aucune fonctionnalité pour l'instant.</MudText>
+    }
+    else
+    {
+        <MudList T="string">
+            @foreach (var fonctionnalite in _fonctionnalites)
+            {
+                <MudListItem T="string">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.body1">@fonctionnalite.Nom</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @(fonctionnalite.ActeurNom is not null ? $"Utilisée par : {fonctionnalite.ActeurNom} — " : "")
+                                @fonctionnalite.CriteresAcceptation.Count critère(s) d'acceptation
+                            </MudText>
+                        </div>
+                        @if (fonctionnalite.EstOrpheline)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error">Orpheline</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success">Couverte</MudChip>
+                        }
+                    </MudStack>
+
+                    @if (fonctionnalite.CriteresAcceptation.Count == 0)
+                    {
+                        <MudExpansionPanels Elevation="0" Class="mt-2">
+                            <MudExpansionPanel Text="Ajouter un critère d'acceptation (Given/When/Then)">
+                                <MudTextField T="string" Value="@ObtenirBrouillon(_given, fonctionnalite.Id)"
+                                              ValueChanged="@(v => _given[fonctionnalite.Id] = v)" Label="Given (contexte)" Class="mb-2" />
+                                <MudTextField T="string" Value="@ObtenirBrouillon(_when, fonctionnalite.Id)"
+                                              ValueChanged="@(v => _when[fonctionnalite.Id] = v)" Label="When (action)" Class="mb-2" />
+                                <MudTextField T="string" Value="@ObtenirBrouillon(_then, fonctionnalite.Id)"
+                                              ValueChanged="@(v => _then[fonctionnalite.Id] = v)" Label="Then (résultat attendu)" Class="mb-2" />
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                           OnClick="@(() => AjouterCritereAsync(fonctionnalite.Id))">
+                                    Ajouter ce critère
+                                </MudButton>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
+                    }
+                </MudListItem>
+            }
+        </MudList>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public int ProjetId { get; set; }
+    [Parameter, EditorRequired] public int PhaseId { get; set; }
+
+    private MudForm? _form;
+    private string _nom = string.Empty;
+    private string? _description;
+    private int? _acteurId;
+    private int? _problemeId;
+    private int? _entiteId;
+    private bool _enCours;
+
+    private List<FonctionnaliteDto> _fonctionnalites = [];
+    private List<ProblemeDto> _problemes = [];
+    private List<ActeurDto> _acteurs = [];
+    private List<EntiteDto> _entites = [];
+
+    private readonly Dictionary<int, string> _given = [];
+    private readonly Dictionary<int, string> _when = [];
+    private readonly Dictionary<int, string> _then = [];
+
+    private IEnumerable<ProblemeDto> _problemesNonCouverts => _problemes.Where(p => !p.EstCouvert);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _fonctionnalites = (await DomaineApi.GetFonctionnalitesAsync(ProjetId)).ToList();
+        _problemes = (await DomaineApi.GetProblemesAsync(ProjetId)).ToList();
+        _acteurs = (await DomaineApi.GetActeursAsync(ProjetId)).ToList();
+        _entites = (await DomaineApi.GetEntitesAsync(ProjetId)).ToList();
+    }
+
+    private async Task AjouterFonctionnaliteAsync()
+    {
+        if (_form is null || string.IsNullOrWhiteSpace(_nom))
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertFonctionnaliteDto(_acteurId, _nom, _description, PrioriteMoSCoW.NonArbitree, StatutFonctionnalite.Identifiee);
+        var fonctionnalite = await DomaineApi.CreerFonctionnaliteAsync(ProjetId, dto);
+
+        if (fonctionnalite is not null && (_problemeId.HasValue || _entiteId.HasValue))
+        {
+            var lienDto = new CreerLienTracabiliteDto(_problemeId, fonctionnalite.Id, _entiteId, null);
+            await DomaineApi.CreerLienTracabiliteAsync(ProjetId, lienDto);
+        }
+
+        _enCours = false;
+
+        if (fonctionnalite is not null)
+        {
+            _nom = string.Empty;
+            _description = null;
+            _acteurId = null;
+            _problemeId = null;
+            _entiteId = null;
+            await ChargerAsync();
+            Snackbar.Add("Fonctionnalité ajoutée.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Impossible d'ajouter la fonctionnalité.", Severity.Error);
+        }
+    }
+
+    private static string ObtenirBrouillon(Dictionary<int, string> brouillons, int fonctionnaliteId) =>
+        brouillons.GetValueOrDefault(fonctionnaliteId, string.Empty);
+
+    private async Task AjouterCritereAsync(int fonctionnaliteId)
+    {
+        var given = _given.GetValueOrDefault(fonctionnaliteId);
+        var when = _when.GetValueOrDefault(fonctionnaliteId);
+        var then = _then.GetValueOrDefault(fonctionnaliteId);
+
+        if (string.IsNullOrWhiteSpace(given) || string.IsNullOrWhiteSpace(when) || string.IsNullOrWhiteSpace(then))
+        {
+            Snackbar.Add("Les trois champs Given/When/Then sont requis.", Severity.Warning);
+            return;
+        }
+
+        var dto = new UpsertCritereAcceptationDto(given, when, then);
+        var succes = await DomaineApi.AjouterCritereAsync(ProjetId, fonctionnaliteId, dto) is not null;
+
+        if (succes)
+        {
+            _given.Remove(fonctionnaliteId);
+            _when.Remove(fonctionnaliteId);
+            _then.Remove(fonctionnaliteId);
+            await ChargerAsync();
+            Snackbar.Add("Critère ajouté.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Impossible d'ajouter le critère.", Severity.Error);
+        }
+    }
+}

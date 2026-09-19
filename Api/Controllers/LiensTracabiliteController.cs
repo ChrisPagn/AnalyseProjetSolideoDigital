@@ -29,17 +29,20 @@ public class LiensTracabiliteController(AnalyseProjetDbContext db, MaturiteCalcu
             .Where(l =>
                 (l.Probleme != null && l.Probleme.ProjetId == projetId) ||
                 (l.Fonctionnalite != null && l.Fonctionnalite.ProjetId == projetId) ||
-                (l.Entite != null && l.Entite.ProjetId == projetId))
+                (l.Entite != null && l.Entite.ProjetId == projetId) ||
+                (l.InformationRegistre != null && l.InformationRegistre.ProjetId == projetId))
             .Include(l => l.Probleme)
             .Include(l => l.Fonctionnalite)
             .Include(l => l.Entite)
+            .Include(l => l.InformationRegistre)
             .OrderBy(l => l.Id)
             .Select(l => new LienTracabiliteDto(
                 l.Id,
                 l.ProblemeId, l.Probleme != null ? l.Probleme.Code : null,
                 l.FonctionnaliteId, l.Fonctionnalite != null ? l.Fonctionnalite.Code : null,
                 l.EntiteId, l.Entite != null ? l.Entite.Code : null,
-                l.CritereAcceptationId))
+                l.CritereAcceptationId,
+                l.InformationRegistreId, l.InformationRegistre != null ? l.InformationRegistre.Code : null))
             .ToListAsync(cancellationToken);
 
         return Ok(liens);
@@ -49,9 +52,10 @@ public class LiensTracabiliteController(AnalyseProjetDbContext db, MaturiteCalcu
     public async Task<ActionResult<LienTracabiliteDto>> Creer(
         int projetId, CreerLienTracabiliteDto dto, CancellationToken cancellationToken)
     {
-        if (dto is { ProblemeId: null, FonctionnaliteId: null, EntiteId: null, CritereAcceptationId: null })
+        if (dto is { ProblemeId: null, FonctionnaliteId: null, EntiteId: null, CritereAcceptationId: null, InformationRegistreId: null })
         {
-            ModelState.AddModelError(string.Empty, "Au moins un lien (Problème, Fonctionnalité, Entité ou Critère) est requis.");
+            ModelState.AddModelError(string.Empty,
+                "Au moins un lien (Problème, Fonctionnalité, Entité, Critère ou Information) est requis.");
             return ValidationProblem(ModelState);
         }
 
@@ -60,7 +64,8 @@ public class LiensTracabiliteController(AnalyseProjetDbContext db, MaturiteCalcu
             ProblemeId = dto.ProblemeId,
             FonctionnaliteId = dto.FonctionnaliteId,
             EntiteId = dto.EntiteId,
-            CritereAcceptationId = dto.CritereAcceptationId
+            CritereAcceptationId = dto.CritereAcceptationId,
+            InformationRegistreId = dto.InformationRegistreId
         };
 
         db.LiensTracabilite.Add(lien);
@@ -76,7 +81,8 @@ public class LiensTracabiliteController(AnalyseProjetDbContext db, MaturiteCalcu
         await db.SaveChangesAsync(cancellationToken);
 
         var resultDto = new LienTracabiliteDto(
-            lien.Id, lien.ProblemeId, null, lien.FonctionnaliteId, null, lien.EntiteId, null, lien.CritereAcceptationId);
+            lien.Id, lien.ProblemeId, null, lien.FonctionnaliteId, null, lien.EntiteId, null,
+            lien.CritereAcceptationId, lien.InformationRegistreId, null);
 
         return CreatedAtAction(nameof(GetTous), new { projetId }, resultDto);
     }

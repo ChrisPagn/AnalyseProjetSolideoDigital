@@ -397,4 +397,68 @@ public class DomaineControllerTests : IAsyncLifetime
         var problemeRelu = await _client.GetFromJsonAsync<ProblemeDto>($"api/projets/{_projetId}/problemes/{probleme.Id}");
         Assert.False(problemeRelu!.EstCouvert);
     }
+
+    // --- Lot D : Fonctionnalites/Automatisations, extension LienTracabilite ---
+
+    [Fact]
+    public async Task Creer_fonctionnalite_est_non_arbitree_par_defaut()
+    {
+        var dto = new UpsertFonctionnaliteDto(null, "Tableau de bord des devis", null, PrioriteMoSCoW.NonArbitree, StatutFonctionnalite.Identifiee);
+
+        var reponse = await _client.PostAsJsonAsync($"api/projets/{_projetId}/fonctionnalites", dto);
+        var fonctionnalite = await reponse.Content.ReadFromJsonAsync<FonctionnaliteDto>();
+
+        Assert.Equal(PrioriteMoSCoW.NonArbitree, fonctionnalite!.Priorite);
+    }
+
+    [Fact]
+    public async Task Lien_tracabilite_vers_information_registre_couvre_la_fonctionnalite()
+    {
+        // Cas des fonctionnalités transversales (authentification, audit...) justifiées par une
+        // Contrainte/Règle/Exigence NF plutôt que par un Probleme direct.
+        var creationInfo = await _client.PostAsJsonAsync($"api/projets/{_projetId}/informations",
+            new Shared.Dtos.Registres.UpsertInformationRegistreDto(null, "Contrainte RGPD",
+                "Journal d'audit requis pour toute modification de donnée sensible", SourceInformation.Declaratif, StatutInformation.Valide));
+        var info = await creationInfo.Content.ReadFromJsonAsync<Shared.Dtos.Registres.InformationRegistreDto>();
+
+        var creationFonctionnalite = await _client.PostAsJsonAsync($"api/projets/{_projetId}/fonctionnalites",
+            new UpsertFonctionnaliteDto(null, "Journal d'audit", null, PrioriteMoSCoW.NonArbitree, StatutFonctionnalite.Identifiee));
+        var fonctionnalite = await creationFonctionnalite.Content.ReadFromJsonAsync<FonctionnaliteDto>();
+        Assert.True(fonctionnalite!.EstOrpheline);
+
+        var reponseLien = await _client.PostAsJsonAsync($"api/projets/{_projetId}/liens-tracabilite",
+            new CreerLienTracabiliteDto(null, fonctionnalite.Id, null, null, info!.Id));
+        Assert.Equal(HttpStatusCode.Created, reponseLien.StatusCode);
+
+        var lien = await reponseLien.Content.ReadFromJsonAsync<LienTracabiliteDto>();
+        Assert.Equal(info.Id, lien!.InformationRegistreId);
+
+        var fonctionnaliteRelue = await _client.GetFromJsonAsync<FonctionnaliteDto>($"api/projets/{_projetId}/fonctionnalites/{fonctionnalite.Id}");
+        Assert.False(fonctionnaliteRelue!.EstOrpheline);
+    }
+
+    [Fact]
+    public async Task Lien_tracabilite_avec_seulement_information_registre_id_est_accepte()
+    {
+        var creationInfo = await _client.PostAsJsonAsync($"api/projets/{_projetId}/informations",
+            new Shared.Dtos.Registres.UpsertInformationRegistreDto(null, "Exigence NF", "Disponibilité 24/7", SourceInformation.Declaratif, StatutInformation.Valide));
+        var info = await creationInfo.Content.ReadFromJsonAsync<Shared.Dtos.Registres.InformationRegistreDto>();
+
+        var dto = new CreerLienTracabiliteDto(null, null, null, null, info!.Id);
+        var reponse = await _client.PostAsJsonAsync($"api/projets/{_projetId}/liens-tracabilite", dto);
+
+        Assert.Equal(HttpStatusCode.Created, reponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Creer_automatisation_avec_validation_humaine()
+    {
+        var dto = new UpsertAutomatisationDto("Échéance atteinte", "Cotisation non payée", "Envoi email de relance", true);
+
+        var reponse = await _client.PostAsJsonAsync($"api/projets/{_projetId}/automatisations", dto);
+        var automatisation = await reponse.Content.ReadFromJsonAsync<AutomatisationDto>();
+
+        Assert.True(automatisation!.ValidationHumaine);
+        Assert.Equal("AUTO-001", automatisation.Code);
+    }
 }

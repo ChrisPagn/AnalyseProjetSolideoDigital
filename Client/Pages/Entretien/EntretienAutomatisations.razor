@@ -1,0 +1,120 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+
+@*
+    Phase 09 — Automatisations (docs/03-proposition-phases-05-18-v2.md) : actions qui se
+    déclenchent sans intervention humaine (ou avec validation minimale), distinctes des
+    Fonctionnalites pilotées manuellement.
+*@
+<MudPaper Class="pa-6" Elevation="2">
+    <MudText Typo="Typo.h5" Class="mb-1">Automatisations</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Quel événement déclenche cette automatisation ? Que doit-il se passer automatiquement ?
+    </MudText>
+
+    <MudAlert Severity="Severity.Info" Class="mb-4" Icon="@Icons.Material.Filled.Lightbulb">
+        Critère de bascule : « Est-ce que quelqu'un doit décider de faire cette action à chaque
+        fois, ou peut-elle partir toute seule dès que la condition est remplie ? » — première
+        réponse = Fonctionnalité (Phase 08), seconde = Automatisation.
+    </MudAlert>
+
+    <MudForm @ref="_form">
+        <MudTextField T="string" @bind-Value="_declencheur" Label="Quel événement déclenche cette automatisation ?"
+                       AutoFocus="true" Class="mb-4" Style="min-height:44px" Required="true" />
+        <MudTextField T="string" @bind-Value="_condition" Label="Condition à vérifier avant d'agir (optionnel)" Class="mb-4" Style="min-height:44px" />
+        <MudTextField T="string" @bind-Value="_action" Label="Que doit-il se passer automatiquement ?"
+                       Class="mb-4" Style="min-height:44px" Required="true" />
+
+        <MudCheckBox T="bool" @bind-Value="_validationHumaine"
+                     Label="Une personne doit valider avant l'exécution réelle" Class="mb-4" />
+    </MudForm>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+               Disabled="@(_enCours || string.IsNullOrWhiteSpace(_declencheur) || string.IsNullOrWhiteSpace(_action))"
+               OnClick="@AjouterAutomatisationAsync" Class="mb-6" Style="min-height:44px">
+        Ajouter l'automatisation
+    </MudButton>
+
+    <MudDivider Class="mb-4" />
+
+    <MudText Typo="Typo.subtitle1" Class="mb-2">Automatisations déjà identifiées (@_automatisations.Count)</MudText>
+    @if (_automatisations.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Aucune automatisation pour l'instant — c'est normal si ce projet n'en a pas besoin en V1.
+        </MudText>
+    }
+    else
+    {
+        <MudList T="string">
+            @foreach (var automatisation in _automatisations)
+            {
+                <MudListItem T="string">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.body1">@automatisation.Declencheur → @automatisation.Action</MudText>
+                            @if (!string.IsNullOrWhiteSpace(automatisation.Condition))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Condition : @automatisation.Condition</MudText>
+                            }
+                        </div>
+                        <MudChip T="string" Size="Size.Small" Color="@(automatisation.ValidationHumaine ? Color.Warning : Color.Default)">
+                            @(automatisation.ValidationHumaine ? "Validation requise" : "Autonome")
+                        </MudChip>
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public int ProjetId { get; set; }
+    [Parameter, EditorRequired] public int PhaseId { get; set; }
+
+    private MudForm? _form;
+    private string _declencheur = string.Empty;
+    private string? _condition;
+    private string _action = string.Empty;
+    private bool _validationHumaine;
+    private bool _enCours;
+
+    private List<AutomatisationDto> _automatisations = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _automatisations = (await DomaineApi.GetAutomatisationsAsync(ProjetId)).ToList();
+    }
+
+    private async Task AjouterAutomatisationAsync()
+    {
+        if (_form is null || string.IsNullOrWhiteSpace(_declencheur) || string.IsNullOrWhiteSpace(_action))
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertAutomatisationDto(_declencheur, _condition, _action, _validationHumaine);
+        var succes = await DomaineApi.CreerAutomatisationAsync(ProjetId, dto) is not null;
+        _enCours = false;
+
+        if (succes)
+        {
+            _declencheur = string.Empty;
+            _condition = null;
+            _action = string.Empty;
+            _validationHumaine = false;
+            await ChargerAsync();
+            Snackbar.Add("Automatisation ajoutée.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Impossible d'ajouter l'automatisation.", Severity.Error);
+        }
+    }
+}

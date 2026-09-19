@@ -77,6 +77,14 @@ else
     {
         <EntretienDocuments ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
     }
+    else if (_phaseActive.Numero == 8)
+    {
+        <EntretienFonctionnalites ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
+    }
+    else if (_phaseActive.Numero == 9)
+    {
+        <EntretienAutomatisations ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
+    }
     else
     {
         <MudAlert Severity="Severity.Info" Class="mb-4">
