@@ -1,0 +1,85 @@
+@page "/projets/{ProjetId:int}/preparation"
+@attribute [Authorize]
+@inject ProjetsApiClient ProjetsApi
+@inject ISnackbar Snackbar
+
+@*
+    Notes de préparation avant RDV — hors numérotation des 18 Phases (docs/03-proposition-
+    phases-05-18-v2.md) : ne crée aucun registre, aucun impact sur la maturité. Juste un
+    pense-bête (notes libres + checklist des questions principales) pour préparer l'entretien.
+*@
+<PageTitle>Préparation — @(_projet?.Nom ?? "Chargement...")</PageTitle>
+
+@if (_projet is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="4" Class="mb-4">
+        <div>
+            <MudText Typo="Typo.h4">@_projet.Nom</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Préparation du RDV — @_projet.ClientNom</MudText>
+        </div>
+    </MudStack>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-2">Notes libres</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Secteur, concurrents connus, outils actuels déjà repérés — tout ce qui peut être utile
+            avant d'entrer en RDV. Sans effet sur l'analyse ni sur les registres.
+        </MudText>
+        <MudTextField T="string" @bind-Value="_notes" Lines="8" Variant="Variant.Outlined"
+                       Label="Notes de préparation" Style="min-height:44px" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Disabled="@_enregistrementEnCours"
+                   OnClick="@EnregistrerNotesAsync" Style="min-height:44px">
+            Enregistrer
+        </MudButton>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-2">Checklist des questions principales</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Pense-bête avant le RDV — cocher n'enregistre rien, c'est juste un repère visuel pour
+            cette session de préparation.
+        </MudText>
+        @foreach (var (numeroPhase, nomPhase, questions) in _checklist)
+        {
+            <MudText Typo="Typo.subtitle1" Class="mt-4 mb-1">Phase @numeroPhase — @nomPhase</MudText>
+            @foreach (var question in questions)
+            {
+                <MudCheckBox T="bool" Label="@question.Libelle" Dense="true" />
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public int ProjetId { get; set; }
+
+    private ProjetDto? _projet;
+    private string? _notes;
+    private bool _enregistrementEnCours;
+
+    private readonly List<(int NumeroPhase, string NomPhase, IReadOnlyList<Shared.ModeEntretien.QuestionGuidee> Questions)> _checklist =
+    [
+        (1, "Fiche client", Shared.ModeEntretien.QuestionsGuideesParPhase.Phase01FicheClient),
+        (2, "Découverte du projet", Shared.ModeEntretien.QuestionsGuideesParPhase.Phase02DecouverteProjet),
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _projet = await ProjetsApi.GetParIdAsync(ProjetId);
+        _notes = _projet?.NotesPreparation;
+    }
+
+    private async Task EnregistrerNotesAsync()
+    {
+        _enregistrementEnCours = true;
+        var succes = await ProjetsApi.ModifierNotesPreparationAsync(ProjetId, _notes);
+        _enregistrementEnCours = false;
+
+        Snackbar.Add(succes ? "Notes enregistrées." : "Impossible d'enregistrer les notes.",
+            succes ? Severity.Success : Severity.Error);
+    }
+}

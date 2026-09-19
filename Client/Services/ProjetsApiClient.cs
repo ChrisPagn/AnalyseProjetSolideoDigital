@@ -43,6 +43,13 @@ public class ProjetsApiClient(HttpClient httpClient)
         return resultat.IsSuccessStatusCode;
     }
 
+    public async Task<bool> ModifierNotesPreparationAsync(int id, string? notes)
+    {
+        var resultat = await EnvoyerAsync(HttpMethod.Put, $"api/projets/{id}/notes-preparation",
+            new UpsertNotesPreparationDto(notes));
+        return resultat.IsSuccessStatusCode;
+    }
+
     private async Task<HttpResponseMessage> EnvoyerAsync(HttpMethod method, string url, object? contenu = null)
     {
         using var requete = new HttpRequestMessage(method, url);

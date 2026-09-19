@@ -19,6 +19,14 @@ public class Projet
     public string? StackEnvisagee { get; set; }
     public StatutProjet Statut { get; set; } = StatutProjet.EnCours;
 
+    /// <summary>
+    /// Notes libres de préparation avant le premier RDV (secteur, concurrents connus, outils
+    /// actuels déjà repérés) — hors numérotation des 18 Phases, aucun impact sur la maturité ni
+    /// sur les registres (voir docs/03-proposition-phases-05-18-v2.md, section "Notes de
+    /// préparation").
+    /// </summary>
+    public string? NotesPreparation { get; set; }
+
     public ICollection<Phase> Phases { get; set; } = new List<Phase>();
     public ICollection<InformationRegistre> Informations { get; set; } = new List<InformationRegistre>();
     public ICollection<QuestionRegistre> Questions { get; set; } = new List<QuestionRegistre>();

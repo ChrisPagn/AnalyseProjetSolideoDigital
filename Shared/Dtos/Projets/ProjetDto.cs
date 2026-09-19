@@ -10,4 +10,5 @@ public record ProjetDto(
     DateTime DateCreation,
     NiveauMaturite NiveauMaturite,
     string? StackEnvisagee,
-    StatutProjet Statut);
+    StatutProjet Statut,
+    string? NotesPreparation);

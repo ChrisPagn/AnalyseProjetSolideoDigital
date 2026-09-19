@@ -101,4 +101,29 @@ public class ProjetsControllerTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NotFound, reponse.StatusCode);
     }
+
+    [Fact]
+    public async Task ModifierNotesPreparation_persiste_les_notes()
+    {
+        var creation = await _client.PostAsJsonAsync("api/projets",
+            new UpsertProjetDto("Projet Notes", _clientId, null, StatutProjet.EnCours));
+        var projet = (await creation.Content.ReadFromJsonAsync<ProjetDto>())!;
+        Assert.Null(projet.NotesPreparation);
+
+        var reponseModif = await _client.PutAsJsonAsync($"api/projets/{projet.Id}/notes-preparation",
+            new UpsertNotesPreparationDto("Secteur : BTP. Concurrent connu : Outil X."));
+        Assert.Equal(HttpStatusCode.NoContent, reponseModif.StatusCode);
+
+        var relu = await _client.GetFromJsonAsync<ProjetDto>($"api/projets/{projet.Id}");
+        Assert.Equal("Secteur : BTP. Concurrent connu : Outil X.", relu!.NotesPreparation);
+    }
+
+    [Fact]
+    public async Task ModifierNotesPreparation_sur_projet_inexistant_retourne_not_found()
+    {
+        var reponse = await _client.PutAsJsonAsync("api/projets/999999/notes-preparation",
+            new UpsertNotesPreparationDto("peu importe"));
+
+        Assert.Equal(HttpStatusCode.NotFound, reponse.StatusCode);
+    }
 }

@@ -55,7 +55,8 @@ public class PhasesController(AnalyseProjetDbContext db, UpdateStatutPhaseAction
         var projetDto = await db.Projets
             .Where(p => p.Id == projetId)
             .Select(p => new ProjetDto(
-                p.Id, p.Nom, p.ClientId, p.Client!.Nom, p.DateCreation, p.NiveauMaturite, p.StackEnvisagee, p.Statut))
+                p.Id, p.Nom, p.ClientId, p.Client!.Nom, p.DateCreation, p.NiveauMaturite, p.StackEnvisagee, p.Statut,
+                p.NotesPreparation))
             .FirstAsync(cancellationToken);
 
         return Ok(projetDto);

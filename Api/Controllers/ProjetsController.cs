@@ -22,7 +22,8 @@ public class ProjetsController(
         var projets = await db.Projets
             .OrderByDescending(p => p.DateCreation)
             .Select(p => new ProjetDto(
-                p.Id, p.Nom, p.ClientId, p.Client!.Nom, p.DateCreation, p.NiveauMaturite, p.StackEnvisagee, p.Statut))
+                p.Id, p.Nom, p.ClientId, p.Client!.Nom, p.DateCreation, p.NiveauMaturite, p.StackEnvisagee, p.Statut,
+                p.NotesPreparation))
             .ToListAsync(cancellationToken);
 
         return Ok(projets);
@@ -34,7 +35,8 @@ public class ProjetsController(
         var projet = await db.Projets
             .Where(p => p.Id == id)
             .Select(p => new ProjetDto(
-                p.Id, p.Nom, p.ClientId, p.Client!.Nom, p.DateCreation, p.NiveauMaturite, p.StackEnvisagee, p.Statut))
+                p.Id, p.Nom, p.ClientId, p.Client!.Nom, p.DateCreation, p.NiveauMaturite, p.StackEnvisagee, p.Statut,
+                p.NotesPreparation))
             .FirstOrDefaultAsync(cancellationToken);
 
         return projet is null ? NotFound() : Ok(projet);
@@ -54,7 +56,7 @@ public class ProjetsController(
 
         var resultDto = new ProjetDto(
             projet.Id, projet.Nom, projet.ClientId, client.Nom, projet.DateCreation,
-            projet.NiveauMaturite, projet.StackEnvisagee, projet.Statut);
+            projet.NiveauMaturite, projet.StackEnvisagee, projet.Statut, projet.NotesPreparation);
 
         return CreatedAtAction(nameof(GetParId), new { id = projet.Id }, resultDto);
     }
@@ -116,9 +118,30 @@ public class ProjetsController(
         var projetDto = await db.Projets
             .Where(p => p.Id == id)
             .Select(p => new ProjetDto(
-                p.Id, p.Nom, p.ClientId, p.Client!.Nom, p.DateCreation, p.NiveauMaturite, p.StackEnvisagee, p.Statut))
+                p.Id, p.Nom, p.ClientId, p.Client!.Nom, p.DateCreation, p.NiveauMaturite, p.StackEnvisagee, p.Statut,
+                p.NotesPreparation))
             .FirstAsync(cancellationToken);
 
         return Ok(projetDto);
+    }
+
+    /// <summary>
+    /// Notes de préparation avant RDV — hors numérotation des 18 Phases, aucun impact sur la
+    /// maturité (voir docs/03-proposition-phases-05-18-v2.md). Endpoint dédié plutôt que noyé
+    /// dans Modifier/UpsertProjetDto : ce champ n'a pas de sens à la création du projet.
+    /// </summary>
+    [HttpPut("{id:int}/notes-preparation")]
+    public async Task<IActionResult> ModifierNotesPreparation(
+        int id, UpsertNotesPreparationDto dto, CancellationToken cancellationToken)
+    {
+        var projet = await db.Projets.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (projet is null)
+        {
+            return NotFound();
+        }
+
+        projet.NotesPreparation = dto.NotesPreparation;
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
     }
 }

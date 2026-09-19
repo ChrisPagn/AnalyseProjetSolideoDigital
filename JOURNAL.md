@@ -856,3 +856,66 @@ confirmé répondre 401 sans cookie dans le test Docker local.
 `docker-compose.yml`, `Caddyfile` → `Caddyfile.exemple`, `Dockerfile`, `.dockerignore` (nouveau),
 `Api/Program.cs`, `.env.example`, `docker-compose.local.yml` (nouveau), `DEPLOIEMENT.md`. Voir
 `git status` — en attente de validation de l'utilisateur avant commit.
+
+## Extension du Mode Entretien aux Phases 03-18 — Lot A : Notes de préparation (2026-09-19)
+
+### Contexte
+Constat utilisateur en test réel : le Mode entretien guidé ("une question à la fois") ne
+fonctionne que pour les Phases 01/02 — au-delà, il renvoie vers les onglets Registres génériques
+(vides tant que rien n'y est saisi manuellement). Analyse menée avec l'utilisateur (voir
+`docs/03-proposition-phases-05-18-v2.md`, qui remplace `docs/02 Guide18phasesB.pdf` comme
+référence) : aucune source (Guide 18 phases, Prompt Maître) ne détaillait de questions pour les
+Phases 05-18 — contenu rédigé de zéro, relu et corrigé une fois par l'utilisateur (6 anomalies +
+points mineurs), avant tout code. Document découpé en lots d'implémentation ; ce lot traite le
+premier, le plus simple et indépendant : les **Notes de préparation**.
+
+### Contenu réalisé
+- **Notes de préparation** (hors numérotation des 18 Phases, aucun registre, aucun impact sur la
+  maturité — décision actée avec l'utilisateur après qu'il ait proposé une "Phase 00" : la
+  contrainte du Prompt Maître sur la numérotation 1-18 a été respectée en rattachant ce contenu
+  directement au `Projet` plutôt qu'à une `Phase`).
+- `Projet.NotesPreparation` (string?, nouvelle colonne) — migration EF Core
+  `AddNotesPreparation`.
+- `ProjetDto` étendu avec `NotesPreparation` ; mis à jour dans les 5 endroits qui le
+  construisaient (`ProjetsController` × 4, `PhasesController` × 1).
+- `UpsertNotesPreparationDto` (nouveau DTO dédié) + endpoint `PUT
+  api/projets/{id}/notes-preparation` sur `ProjetsController` — volontairement séparé de
+  `UpsertProjetDto`/`Modifier` existant : ce champ n'a pas de sens à la création du projet.
+- `ProjetsApiClient.ModifierNotesPreparationAsync` (Client).
+- `Client/Pages/Preparation/PreparationProjet.razor` (route
+  `/projets/{ProjetId:int}/preparation`) : zone de notes libres (texte multiligne, persisté) +
+  checklist en lecture seule des questions principales des Phases 01/02 (générée à partir de
+  `QuestionsGuideesParPhase`, déjà existant — cocher n'a aucun effet, pense-bête uniquement).
+  Lien ajouté dans la liste des Projets (icône dédiée, avant "Voir les phases").
+- Tests xUnit : `ModifierNotesPreparation_persiste_les_notes`,
+  `ModifierNotesPreparation_sur_projet_inexistant_retourne_not_found`. 127/127 tests passent au
+  total (125 hérités + 2 nouveaux).
+- Flux vérifié dans un vrai navigateur (Chrome headless + CDP) : saisie de notes via événements
+  clavier réels (le même correctif Tab/blur que pour le formulaire de connexion s'est révélé
+  nécessaire ici aussi — un event `input` synthétique seul ne suffit pas toujours à déclencher le
+  binding MudBlazor), clic sur Enregistrer, confirmation par snackbar, **rechargement complet de
+  la page et re-vérification que les notes sont bien relues depuis l'Api** (pas juste conservées
+  en mémoire côté client) — confirmé avec succès. Données de test nettoyées après vérification.
+
+### Décisions d'architecture prises
+- Endpoint dédié (`PUT .../notes-preparation`) plutôt qu'ajout au DTO d'upsert général du
+  Projet : évite de proposer ce champ au moment de la création, où il n'a pas de sens, et rend
+  l'intention de chaque appel explicite.
+- Checklist en lecture seule non persistée : cocher une question ne crée ni ne modifie aucune
+  donnée — c'est un repère visuel de session, pas une donnée d'analyse (cohérent avec la décision
+  actée : cette fonctionnalité ne doit avoir aucun effet sur les registres ni sur la maturité).
+
+### Problèmes connus / points ouverts
+- Lots B à H du document `docs/03-proposition-phases-05-18-v2.md` restent à implémenter (Phases
+  05+06 ensemble, 07, 08+09, 10/11/12/13/15/17 [Synthèse], 14, 16 [Validation], 18) — voir ce
+  document pour le détail et l'ordre proposé.
+- Rien n'a encore été commité pour ce lot — voir `git status`.
+
+### Fichiers créés/modifiés
+`Api/Data/Entities/Projet.cs`, `Api/Data/Migrations/*_AddNotesPreparation.cs`,
+`Shared/Dtos/Projets/ProjetDto.cs`, `Shared/Dtos/Projets/UpsertNotesPreparationDto.cs`
+(nouveau), `Api/Controllers/ProjetsController.cs`, `Api/Controllers/PhasesController.cs`,
+`Client/Services/ProjetsApiClient.cs`, `Client/Pages/Preparation/PreparationProjet.razor`
+(nouveau), `Client/Pages/Projets/Projets.razor`, `Client/_Imports.razor`,
+`Api.Tests/Controllers/ProjetsControllerTests.cs`. Voir `git status` — en attente de validation
+de l'utilisateur avant commit.
