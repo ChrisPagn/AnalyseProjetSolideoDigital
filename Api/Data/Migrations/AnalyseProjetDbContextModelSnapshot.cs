@@ -44,7 +44,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("Acteurs");
+                    b.ToTable("Acteurs", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.ApplicationUser", b =>
@@ -146,7 +146,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("Automatisations");
+                    b.ToTable("Automatisations", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.Client", b =>
@@ -177,7 +177,7 @@ namespace Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Clients");
+                    b.ToTable("Clients", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.CompteurCode", b =>
@@ -202,7 +202,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Prefixe")
                         .IsUnique();
 
-                    b.ToTable("CompteursCode");
+                    b.ToTable("CompteursCode", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.CritereAcceptation", b =>
@@ -233,7 +233,7 @@ namespace Api.Data.Migrations
 
                     b.HasIndex("FonctionnaliteId");
 
-                    b.ToTable("CriteresAcceptation");
+                    b.ToTable("CriteresAcceptation", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.DecisionRegistre", b =>
@@ -269,7 +269,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("DecisionsRegistre");
+                    b.ToTable("DecisionsRegistre", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.DocumentMetier", b =>
@@ -308,7 +308,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("DocumentsMetier");
+                    b.ToTable("DocumentsMetier", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.Entite", b =>
@@ -344,7 +344,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("Entites");
+                    b.ToTable("Entites", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.EtapeProcessus", b =>
@@ -388,7 +388,7 @@ namespace Api.Data.Migrations
 
                     b.HasIndex("ProcessusId");
 
-                    b.ToTable("EtapesProcessus");
+                    b.ToTable("EtapesProcessus", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.Fonctionnalite", b =>
@@ -433,7 +433,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("Fonctionnalites");
+                    b.ToTable("Fonctionnalites", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.HistoriqueModification", b =>
@@ -473,7 +473,7 @@ namespace Api.Data.Migrations
 
                     b.HasIndex("EntiteType", "EntiteId");
 
-                    b.ToTable("HistoriqueModifications");
+                    b.ToTable("HistoriqueModifications", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.InformationRegistre", b =>
@@ -527,7 +527,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("InformationsRegistre", t =>
+                    b.ToTable("InformationsRegistre", null, t =>
                         {
                             t.HasCheckConstraint("CK_InformationRegistre_LienPolymorpheCoherent", "(\"EntiteType\" IS NULL AND \"EntiteReferenceId\" IS NULL) OR (\"EntiteType\" IS NOT NULL AND \"EntiteReferenceId\" IS NOT NULL)");
                         });
@@ -561,7 +561,7 @@ namespace Api.Data.Migrations
 
                     b.HasIndex("ProblemeId");
 
-                    b.ToTable("LiensTracabilite", t =>
+                    b.ToTable("LiensTracabilite", null, t =>
                         {
                             t.HasCheckConstraint("CK_LienTracabilite_AuMoinsUnLien", "\"ProblemeId\" IS NOT NULL OR \"FonctionnaliteId\" IS NOT NULL OR \"EntiteId\" IS NOT NULL OR \"CritereAcceptationId\" IS NOT NULL");
                         });
@@ -600,7 +600,7 @@ namespace Api.Data.Migrations
 
                     b.HasIndex("ActeurId");
 
-                    b.ToTable("Permissions");
+                    b.ToTable("Permissions", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.Phase", b =>
@@ -633,7 +633,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Numero")
                         .IsUnique();
 
-                    b.ToTable("Phases");
+                    b.ToTable("Phases", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.Probleme", b =>
@@ -677,7 +677,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("Problemes");
+                    b.ToTable("Problemes", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.Processus", b =>
@@ -707,7 +707,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("Processus");
+                    b.ToTable("Processus", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.Projet", b =>
@@ -747,7 +747,7 @@ namespace Api.Data.Migrations
 
                     b.HasIndex("ClientId");
 
-                    b.ToTable("Projets");
+                    b.ToTable("Projets", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.QuestionRegistre", b =>
@@ -789,7 +789,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("QuestionsRegistre");
+                    b.ToTable("QuestionsRegistre", (string)null);
                 });
 
             modelBuilder.Entity("Api.Data.Entities.RisqueRegistre", b =>
@@ -825,7 +825,7 @@ namespace Api.Data.Migrations
                     b.HasIndex("ProjetId", "Code")
                         .IsUnique();
 
-                    b.ToTable("RisquesRegistre");
+                    b.ToTable("RisquesRegistre", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>

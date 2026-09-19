@@ -1,0 +1,216 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+
+@*
+    Phase 03 — Processus métier (Guide 18 phases, page 3) : documenter le fonctionnement réel
+    actuel, étape par étape. Règle de la cascade : ne jamais sauter à la solution technique, dès
+    qu'un outil est cité (Excel, papier...) creuser avant d'avancer. Une étape ne passe Validée
+    que si ExempleValide = true (exemple concret vérifié), jamais sur la théorie seule.
+*@
+<MudPaper Class="pa-6 mb-4" Elevation="2">
+    <MudText Typo="Typo.h5" Class="mb-1">Processus métier</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Quel processus souhaitez-vous améliorer en priorité ? Quel événement le déclenche, et
+        quand considère-t-on qu'il est terminé ?
+    </MudText>
+
+    @if (_processusSelectionne is null)
+    {
+        <MudForm @ref="_formProcessus">
+            <MudTextField T="string" @bind-Value="_nomProcessus" Label="Nom du processus"
+                           AutoFocus="true" Class="mb-4" Style="min-height:44px" Required="true" />
+            <MudTextField T="string" @bind-Value="_declencheur" Label="Quel événement le déclenche ?" Class="mb-4" Style="min-height:44px" />
+        </MudForm>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                   Disabled="@(_enCours || string.IsNullOrWhiteSpace(_nomProcessus))"
+                   OnClick="@CreerProcessusAsync" Style="min-height:44px">
+            Créer ce processus
+        </MudButton>
+    }
+
+    @if (_processusListe.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" Class="mt-4 mb-2">Processus de ce projet</MudText>
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1">
+            @foreach (var processus in _processusListe)
+            {
+                <MudChip T="string" Color="@(processus.Id == _processusSelectionne?.Id ? Color.Primary : Color.Default)"
+                         OnClick="@(() => SelectionnerProcessusAsync(processus))">
+                    @processus.Nom
+                </MudChip>
+            }
+        </MudStack>
+    }
+</MudPaper>
+
+@if (_processusSelectionne is not null)
+{
+    <MudPaper Class="pa-6" Elevation="2">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudText Typo="Typo.h6">Étapes de « @_processusSelectionne.Nom »</MudText>
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => _processusSelectionne = null)">
+                Changer de processus
+            </MudButton>
+        </MudStack>
+
+        <MudAlert Severity="Severity.Warning" Class="mb-4" Icon="@Icons.Material.Filled.Warning">
+            Règle de la cascade : dès qu'un outil est cité (Excel, papier, email…), creuser avant
+            d'avancer — qui le remplit ? qui le consulte ? plusieurs copies ? Toute réponse
+            « ça dépend de la personne » signale une règle métier non formalisée à approfondir
+            (reprise en Phase 11).
+        </MudAlert>
+
+        <MudForm @ref="_formEtape">
+            <MudTextField T="string" @bind-Value="_acteurEtape" Label="Qui réalise cette étape ?" Class="mb-4" Style="min-height:44px" Required="true" />
+            <MudTextField T="string" @bind-Value="_actionEtape" Label="Quelle action ?" Class="mb-4" Style="min-height:44px" Required="true" />
+            <MudTextField T="string" @bind-Value="_outilEtape" Label="Avec quel outil ?" Class="mb-4" Style="min-height:44px" />
+            <MudTextField T="string" @bind-Value="_dureeEtape" Label="Combien de temps ça prend ?" Class="mb-4" Style="min-height:44px" />
+            <MudTextField T="string" @bind-Value="_erreursEtape" Label="Quelles erreurs surviennent régulièrement ?" Class="mb-4" Style="min-height:44px" />
+
+            <MudCheckBox T="bool" @bind-Value="_exempleValide" Label="Confirmée par un exemple concret vérifié (pas seulement en théorie)" Class="mb-2" />
+            @if (_exempleValide)
+            {
+                <MudTextField T="string" @bind-Value="_exempleDescription" Label="Décrivez l'exemple concret" Class="mb-4" Style="min-height:44px" />
+            }
+        </MudForm>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                   Disabled="@(_enCours || string.IsNullOrWhiteSpace(_acteurEtape) || string.IsNullOrWhiteSpace(_actionEtape))"
+                   OnClick="@AjouterEtapeAsync" Class="mb-6" Style="min-height:44px">
+            Ajouter cette étape
+        </MudButton>
+
+        <MudDivider Class="mb-4" />
+
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Étapes déjà décrites (@_processusSelectionne.Etapes.Count)</MudText>
+        @if (_processusSelectionne.Etapes.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Aucune étape pour l'instant.</MudText>
+        }
+        else
+        {
+            <MudList T="string">
+                @foreach (var etape in _processusSelectionne.Etapes.OrderBy(e => e.Ordre))
+                {
+                    <MudListItem T="string">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <div>
+                                <MudText Typo="Typo.body1">@etape.Ordre. @etape.Action — @etape.Acteur</MudText>
+                                @if (!string.IsNullOrWhiteSpace(etape.Outil))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Outil : @etape.Outil</MudText>
+                                }
+                            </div>
+                            <MudChip T="string" Size="Size.Small" Color="@(etape.ExempleValide ? Color.Success : Color.Warning)">
+                                @(etape.ExempleValide ? "Validée (exemple vérifié)" : "À confirmer")
+                            </MudChip>
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public int ProjetId { get; set; }
+    [Parameter, EditorRequired] public int PhaseId { get; set; }
+
+    private MudForm? _formProcessus;
+    private MudForm? _formEtape;
+    private bool _enCours;
+
+    private string _nomProcessus = string.Empty;
+    private string? _declencheur;
+
+    private List<ProcessusDto> _processusListe = [];
+    private ProcessusDto? _processusSelectionne;
+
+    private string _acteurEtape = string.Empty;
+    private string _actionEtape = string.Empty;
+    private string? _outilEtape;
+    private string? _dureeEtape;
+    private string? _erreursEtape;
+    private bool _exempleValide;
+    private string? _exempleDescription;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerProcessusAsync();
+    }
+
+    private async Task ChargerProcessusAsync()
+    {
+        _processusListe = (await DomaineApi.GetProcessusAsync(ProjetId)).ToList();
+        if (_processusSelectionne is not null)
+        {
+            _processusSelectionne = _processusListe.FirstOrDefault(p => p.Id == _processusSelectionne.Id);
+        }
+    }
+
+    private void SelectionnerProcessusAsync(ProcessusDto processus)
+    {
+        _processusSelectionne = processus;
+    }
+
+    private async Task CreerProcessusAsync()
+    {
+        if (_formProcessus is null || string.IsNullOrWhiteSpace(_nomProcessus))
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertProcessusDto(_nomProcessus, _declencheur);
+        var cree = await DomaineApi.CreerProcessusAsync(ProjetId, dto);
+        _enCours = false;
+
+        if (cree is not null)
+        {
+            _nomProcessus = string.Empty;
+            _declencheur = null;
+            await ChargerProcessusAsync();
+            _processusSelectionne = _processusListe.First(p => p.Id == cree.Id);
+            Snackbar.Add("Processus créé.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Impossible de créer le processus.", Severity.Error);
+        }
+    }
+
+    private async Task AjouterEtapeAsync()
+    {
+        if (_formEtape is null || _processusSelectionne is null
+            || string.IsNullOrWhiteSpace(_acteurEtape) || string.IsNullOrWhiteSpace(_actionEtape))
+        {
+            return;
+        }
+
+        _enCours = true;
+        var ordre = _processusSelectionne.Etapes.Count + 1;
+        var dto = new UpsertEtapeProcessusDto(
+            ordre, _acteurEtape, _actionEtape, _outilEtape, _dureeEtape, _erreursEtape,
+            _exempleValide, _exempleValide ? _exempleDescription : null);
+
+        var succes = await DomaineApi.AjouterEtapeAsync(ProjetId, _processusSelectionne.Id, dto) is not null;
+        _enCours = false;
+
+        if (succes)
+        {
+            _acteurEtape = string.Empty;
+            _actionEtape = string.Empty;
+            _outilEtape = null;
+            _dureeEtape = null;
+            _erreursEtape = null;
+            _exempleValide = false;
+            _exempleDescription = null;
+            await ChargerProcessusAsync();
+            Snackbar.Add("Étape ajoutée.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Impossible d'ajouter l'étape.", Severity.Error);
+        }
+    }
+}

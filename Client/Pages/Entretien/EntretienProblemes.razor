@@ -1,0 +1,163 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+
+@*
+    Phase 04 — Problèmes et besoins (Guide 18 phases, pages 4-5) : convertir la Demande (Phase
+    02) et le processus documenté (Phase 03) en problèmes réels quantifiés. Le score
+    (Frequence × ImpactTempsHeuresMois) est calculé côté serveur — jamais saisi directement
+    (Prompt Maître 4.3).
+*@
+<MudPaper Class="pa-6" Elevation="2">
+    <MudText Typo="Typo.h5" Class="mb-1">Problèmes et besoins</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Quels sont vos 3 problèmes principaux aujourd'hui ? Lequel vous fait perdre le plus de
+        temps, coûte le plus cher, ou génère le plus d'erreurs ?
+    </MudText>
+
+    <MudAlert Severity="Severity.Warning" Class="mb-4" Icon="@Icons.Material.Filled.Lightbulb">
+        Garde-fou anti-solution-prématurée : « Existe-t-il une autre manière d'obtenir le même
+        résultat que celle que vous imaginez ? » — à poser systématiquement avant de valider un
+        problème.
+    </MudAlert>
+
+    <MudForm @ref="_form">
+        <MudTextField T="string" @bind-Value="_description" Label="Description du problème"
+                       AutoFocus="true" Lines="2" Class="mb-4" Style="min-height:44px" Required="true" />
+
+        <MudSelect T="Gravite" @bind-Value="_gravite" Label="Gravité" Class="mb-4">
+            <MudSelectItem Value="Gravite.Faible">🟢 Faible</MudSelectItem>
+            <MudSelectItem Value="Gravite.Modere">🟡 Modéré</MudSelectItem>
+            <MudSelectItem Value="Gravite.Important">🟠 Important</MudSelectItem>
+            <MudSelectItem Value="Gravite.Critique">🔴 Critique</MudSelectItem>
+        </MudSelect>
+
+        <MudNumericField T="decimal" @bind-Value="_frequence" Label="Fréquence (occurrences/mois)"
+                          Min="0" Class="mb-4" Style="min-height:44px" />
+        <MudNumericField T="decimal" @bind-Value="_impactTemps" Label="Impact temps (heures/mois)"
+                          Min="0" Class="mb-4" Style="min-height:44px" />
+        <MudNumericField T="decimal?" @bind-Value="_coutEstime" Label="Coût estimé (optionnel)"
+                          Min="0" Class="mb-4" Style="min-height:44px" />
+
+        @if (_frequence > 0 && _impactTemps > 0)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-4">
+                Score calculé (aperçu, confirmé côté serveur) : @(_frequence * _impactTemps)
+            </MudText>
+        }
+    </MudForm>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" FullWidth="true"
+               Disabled="@(_enCours || string.IsNullOrWhiteSpace(_description))"
+               OnClick="@AjouterProblemeAsync" Class="mb-6" Style="min-height:44px">
+        Ajouter le problème
+    </MudButton>
+
+    <MudDivider Class="mb-4" />
+
+    <MudText Typo="Typo.subtitle1" Class="mb-2">Problèmes déjà identifiés (@_problemes.Count)</MudText>
+    @if (_problemes.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Aucun problème pour l'instant.</MudText>
+    }
+    else
+    {
+        <MudList T="string">
+            @foreach (var probleme in _problemes.OrderByDescending(p => p.ScoreCalcule))
+            {
+                <MudListItem T="string">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.body1">@probleme.Description</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Score : @probleme.ScoreCalcule
+                                @(probleme.EstCouvert ? "" : " — pas encore couvert par une fonctionnalité")
+                            </MudText>
+                        </div>
+                        <MudChip T="string" Size="Size.Small" Color="@CouleurGravite(probleme.Gravite)">
+                            @LibelleGravite(probleme.Gravite)
+                        </MudChip>
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+
+        @if (!_problemes.Any(p => p.Gravite == Gravite.Critique))
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-4">
+                Question bloquante (Guide 18 phases, Phase 04) : au moins un problème 🔴 critique
+                clairement quantifié est requis pour pouvoir prioriser le MVP en Phase 14.
+            </MudAlert>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public int ProjetId { get; set; }
+    [Parameter, EditorRequired] public int PhaseId { get; set; }
+
+    private MudForm? _form;
+    private string _description = string.Empty;
+    private Gravite _gravite = Gravite.Modere;
+    private decimal _frequence;
+    private decimal _impactTemps;
+    private decimal? _coutEstime;
+    private bool _enCours;
+
+    private List<ProblemeDto> _problemes = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerProblemesAsync();
+    }
+
+    private async Task ChargerProblemesAsync()
+    {
+        _problemes = (await DomaineApi.GetProblemesAsync(ProjetId)).ToList();
+    }
+
+    private async Task AjouterProblemeAsync()
+    {
+        if (_form is null || string.IsNullOrWhiteSpace(_description))
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertProblemeDto(_description, _gravite, _frequence, _impactTemps, _coutEstime);
+        var succes = await DomaineApi.CreerProblemeAsync(ProjetId, dto) is not null;
+        _enCours = false;
+
+        if (succes)
+        {
+            _description = string.Empty;
+            _gravite = Gravite.Modere;
+            _frequence = 0;
+            _impactTemps = 0;
+            _coutEstime = null;
+            await ChargerProblemesAsync();
+            Snackbar.Add("Problème ajouté.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Impossible d'ajouter le problème.", Severity.Error);
+        }
+    }
+
+    private static string LibelleGravite(Gravite gravite) => gravite switch
+    {
+        Gravite.Faible => "🟢 Faible",
+        Gravite.Modere => "🟡 Modéré",
+        Gravite.Important => "🟠 Important",
+        Gravite.Critique => "🔴 Critique",
+        _ => gravite.ToString()
+    };
+
+    private static Color CouleurGravite(Gravite gravite) => gravite switch
+    {
+        Gravite.Faible => Color.Success,
+        Gravite.Modere => Color.Warning,
+        Gravite.Important => Color.Warning,
+        Gravite.Critique => Color.Error,
+        _ => Color.Default
+    };
+}

@@ -1010,3 +1010,115 @@ Document `docs/03-proposition-phases-05-18-v2.md` mis à jour en conséquence.
 `Api/Data/DbSeeder.cs`, `Api.Tests/Controllers/DomaineControllerTests.cs`,
 `docs/03-proposition-phases-05-18-v2.md`. Voir `git status` — en attente de validation de
 l'utilisateur avant commit.
+
+## Extension du Mode Entretien aux Phases 03-18 — Lot C : Documents (2026-09-19)
+
+### Contenu réalisé
+Troisième lot du plan (`docs/03-proposition-phases-05-18-v2.md`) — le plus simple des lots
+restants : une seule entité (`DocumentMetier`), pas de grille croisée, mécanisme Source/Statut
+déjà posé par le Lot B et simplement réutilisé ici.
+
+- `DocumentMetierDto`/`UpsertDocumentMetierDto` étendus avec `Source`/`Statut` optionnels, même
+  principe que Acteur/Entite (Lot B) — la vue "Domaine analysé" existante continue de fonctionner
+  à l'identique.
+- `DocumentsMetierController` (CRUD déjà existant depuis l'étape 6) étendu pour créer/mettre à
+  jour l'InformationRegistre compagnon via `InformationCompagnonService` — aucun nouveau service,
+  réutilisation directe de celui du Lot B. La `Valeur` du compagnon reprend l'Origine du document
+  (cohérent avec le choix du Lot B de toujours donner une valeur significative au compagnon, pour
+  qu'il reste comparable par `ContradictionDetectorService`).
+- **Aucune migration EF Core nécessaire** pour ce lot : `DocumentMetier` lui-même n'a pas changé
+  de schéma (vérifié en générant une migration à blanc, confirmée vide, puis retirée).
+- Phase 07 (`EntretienDocuments.razor`) : création de Documents avec Source/Statut, rappel
+  contextuel des outils/fichiers déjà cités en Phase 03 (`EtapeProcessus.Outil`). Aucune question
+  bloquante (un projet peut légitimement n'avoir aucun document formel), cohérent avec le
+  document de référence.
+- `ModeEntretien.razor` route désormais vers `EntretienDocuments` pour la Phase 07.
+- Nom de la Phase 7 mis à jour (retrait de "(provisoire)") dans `CreateProjetAction.cs` et
+  `DbSeeder.cs`.
+- Tests xUnit : 3 nouveaux (`Creer_document_avec_source_et_statut_cree_un_compagnon`,
+  `Creer_document_sans_source_ni_statut_ne_cree_pas_de_compagnon`,
+  `Modifier_document_avec_source_et_statut_met_a_jour_le_compagnon`). 135/135 tests passent au
+  total (132 hérités + 3 nouveaux).
+- Flux vérifié dans un vrai navigateur (Chrome headless + CDP) : ajout d'un Document "Devis"
+  (Validé) en Phase 07, confirmé côté Api (`source`/`statut` corrects). Aucune erreur console.
+  Données de test nettoyées après vérification.
+
+### Décisions d'architecture prises
+- Aucune nouvelle décision structurante : ce lot applique strictement le pattern établi au Lot B
+  (extension DTO + réutilisation `InformationCompagnonService`), confirmant que ce pattern
+  généralise bien aux lots suivants sans adaptation.
+
+### Problèmes connus / points ouverts
+- Lots D à H restent à implémenter (08+09 Fonctionnalités+Automatisations, 10/11/12/13/15,
+  16 Synthèse/17 Validation, 14 Priorisation MVP, 18) — voir
+  `docs/03-proposition-phases-05-18-v2.md`.
+- Rappel (signalé par l'utilisateur, déjà noté dans le document de référence) : les Phases 03/04
+  n'ont elles non plus jamais eu de mode entretien guidé codé — traitement prévu en lot séparé
+  après l'achèvement de 05-18.
+- Rien n'a encore été commité pour ce lot — voir `git status`.
+
+### Fichiers créés/modifiés
+`Shared/Dtos/Domaine/DocumentMetierDto.cs`, `Api/Controllers/DocumentsMetierController.cs`,
+`Client/Pages/Entretien/EntretienDocuments.razor` (nouveau),
+`Client/Pages/Entretien/ModeEntretien.razor`, `Api/Actions/CreateProjetAction.cs`,
+`Api/Data/DbSeeder.cs`, `Api.Tests/Controllers/DomaineControllerTests.cs`. Voir `git status` — en
+attente de validation de l'utilisateur avant commit.
+
+## Extension du Mode Entretien — Lot C-bis : Phases 03/04, insérées en priorité (2026-09-19)
+
+### Contexte
+Après le test visuel du Lot C par l'utilisateur, rappel explicite : les Phases 03 (Processus
+métier) et 04 (Problèmes et besoins) n'ont, elles non plus, jamais eu de mode entretien guidé
+codé — seules 01/02 en ont un, et le trou entre 02 et 05-07 nuisait à la cohérence du parcours en
+usage réel. Décision actée avec l'utilisateur : insérer ce lot maintenant, avant le Lot D, plutôt
+que d'attendre la fin de 05-18. Contrairement à 05-18, le contenu des questions de 03/04 existe
+déjà intégralement dans le Guide des 18 phases source — travail de code seul, pas de rédaction.
+`docs/03-proposition-phases-05-18-v2.md` mis à jour en conséquence (nouvelle section en tête de
+document, remplaçant l'ancien "point ouvert").
+
+### Contenu réalisé
+- **Phase 03 (Processus métier)** : `EntretienProcessus.razor` — création d'un `Processus`
+  (Nom, Declencheur), sélection parmi les processus déjà créés, puis ajout d'`EtapeProcessus`
+  (Acteur, Action, Outil, Durée, Erreurs connues, ExempleValide + ExempleDescription). Bandeau
+  visible rappelant la "règle de la cascade" du Guide 18 phases (créer avant d'avancer dès qu'un
+  outil est cité) et le principe qu'une étape ne passe "Validée" que si confirmée par un exemple
+  concret, jamais sur la seule théorie.
+- **Phase 04 (Problèmes et besoins)** : `EntretienProblemes.razor` — création de `Probleme`
+  (Description, Gravite, Frequence, ImpactTempsHeuresMois, CoutEstime optionnel), score calculé
+  côté serveur affiché en aperçu. Garde-fou anti-solution-prématurée affiché en évidence
+  ("Existe-t-il une autre manière d'obtenir le même résultat ?"). Liste triée par score
+  décroissant, alerte visible tant qu'aucun problème 🔴 Critique n'existe (question bloquante du
+  Guide 18 phases, nécessaire pour prioriser le MVP en Phase 14).
+- **Aucune migration EF Core, aucune extension du mécanisme Source/Statut** : confirmé pendant
+  l'analyse — `Processus`/`EtapeProcessus` et `Probleme` portent déjà nativement leur mécanisme de
+  confiance (`ExempleValide`, `Gravite`/`ScoreCalcule`), contrairement à Acteur/Entite/
+  DocumentMetier qui n'avaient rien avant le Lot B. Les controllers existants (créés à l'étape 6)
+  n'ont eu besoin d'aucune modification.
+- `ModeEntretien.razor` route désormais vers ces deux composants pour les Phases 03/04.
+- Pas de changement de nom de phase nécessaire : "Processus métier" et "Problèmes et besoins"
+  étaient déjà définitifs (jamais marqués "(provisoire)", contrairement à 05-18).
+- **Aucun nouveau test xUnit** : les controllers `ProcessusController`/`ProblemesController`
+  n'ont pas changé, ils étaient déjà entièrement testés depuis l'étape 6 — 135/135 toujours verts.
+- Flux vérifié dans un vrai navigateur (Chrome headless + CDP) sur les deux phases : Phase 03 —
+  création du processus "Etablissement devis", ajout d'une étape (acteur "Karim Martin", action
+  "Visite du chantier") ; Phase 04 — ajout du problème "Relances manuelles oubliees", confirmé
+  couvert par `EstCouvert: false` (cohérent, aucune Fonctionnalite ne le couvre encore). Aucune
+  erreur console. Données de test nettoyées après vérification.
+
+### Décisions d'architecture prises
+- Réordonnancement du plan d'implémentation (Lot C-bis avant Lot D) : décision produit actée
+  avec l'utilisateur en cours de route, pas une correction d'erreur — combler le trou le plus
+  visible en usage réel avant d'investir dans des lots plus lourds (Lot D touche
+  `LienTracabilite`).
+
+### Problèmes connus / points ouverts
+- Lots D à H restent à implémenter (08+09 Fonctionnalités+Automatisations, 10/11/12/13/15,
+  16 Synthèse/17 Validation, 14 Priorisation MVP, 18) — voir
+  `docs/03-proposition-phases-05-18-v2.md`.
+- Rien n'a encore été commité pour ce lot — voir `git status`.
+
+### Fichiers créés/modifiés
+`Client/Pages/Entretien/EntretienProcessus.razor` (nouveau),
+`Client/Pages/Entretien/EntretienProblemes.razor` (nouveau),
+`Client/Pages/Entretien/ModeEntretien.razor`, `docs/03-proposition-phases-05-18-v2.md`. Voir
+`git status` — en attente de validation de l'utilisateur avant commit.

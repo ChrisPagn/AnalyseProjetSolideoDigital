@@ -11,15 +11,52 @@ développement**, celui que l'outil génère en Phase 18 pour un futur projet cl
 lister les entités de données pour 05-18, sans script de questions. Les noms de phases 05-18
 sont eux-mêmes marqués "(provisoire)" dans le code (`CreateProjetAction.cs`).
 
-## Point ouvert — Phases 03/04 également sans mode entretien guidé (hors périmètre de ce document)
+## Phases 03/04 — traitées en priorité, avant le Lot D (mise à jour 2026-09-19)
 
-Signalé par l'utilisateur en test réel (2026-09-19) : les Phases 03 (Processus métier) et 04
-(Problèmes et besoins) n'ont, elles non plus, jamais eu de mode entretien guidé codé — seules 01
-et 02 en ont un. Contrairement aux Phases 05-18 traitées par ce document, leur contenu de
-questions existe déjà intégralement dans le Guide des 18 phases source (pages 3-5 : questions
-principales, relance, bloquantes, tout est rédigé) — donc pas de travail de rédaction à refaire,
-seulement du code à écrire une fois qu'on s'y attaque. Décision actée : terminer d'abord
-l'implémentation des Phases 05-18 (chantier en cours), traiter 03/04 dans un lot séparé ensuite.
+Signalé par l'utilisateur en test réel : les Phases 03 (Processus métier) et 04 (Problèmes et
+besoins) n'ont, elles non plus, jamais eu de mode entretien guidé codé — seules 01 et 02 en ont
+un. Laisser ce trou au milieu du parcours (01/02 guidées, 03/04 vides, 05-07 guidées) n'a pas de
+sens pour un usage réel en RDV. Décision actée : insérer un lot dédié **Lot C-bis (Phases
+03/04)** immédiatement après le Lot C (Documents) et avant le Lot D (Fonctionnalités/
+Automatisations) — pendant qu'on est dans le rythme du Mode Entretien plutôt que d'attendre la
+fin des 18 phases.
+
+Contrairement aux Phases 05-18 traitées par le reste de ce document, le contenu des questions de
+03/04 existe déjà intégralement dans le Guide des 18 phases source (pages 3-5 : questions
+principales, relance, bloquantes, tout est rédigé) — pas de travail de rédaction à refaire,
+seulement du code. De plus, `Processus`/`EtapeProcessus` et `Probleme` portent déjà nativement
+leur propre mécanisme de confiance (`ExempleValide`/`ExempleDescription`, `Gravite`/
+`ScoreCalcule`) — contrairement à Acteur/Entite/DocumentMetier, elles n'ont pas besoin du
+mécanisme Source/Statut compagnon (Option B) posé au Lot B : ce lot est donc plus proche du Lot C
+en complexité qu'un nouveau Lot B.
+
+**Phase 03 — Processus métier** : `Processus` (Nom, Declencheur) + `EtapeProcessus` (Ordre,
+Acteur, Action, Outil, DureeEstimee, ErreursConnues, ExempleValide, ExempleDescription) —
+entités déjà en place (étape 6). Questions du Guide 18 phases (page 3) : processus à améliorer en
+priorité, déclencheur et fin du processus, étapes dans l'ordre, puis pour chaque étape qui la
+réalise/avec quel outil/quelles infos/quel résultat/combien de temps/quelles erreurs — avec la
+"règle de la cascade" (ne jamais sauter à la solution technique, creuser dès qu'un outil est
+cité). Question bloquante : déclencheur et fin de processus doivent être clairs ; toute étape
+répondue "ça dépend de la personne" doit être marquée et creusée. Une étape ne passe Validée que
+si `ExempleValide = true` (un exemple concret vérifié), jamais sur la seule base d'une
+description théorique.
+
+**Phase 04 — Problèmes et besoins** : `Probleme` (Description, Gravite, Frequence,
+ImpactTempsHeuresMois, CoutEstime, ScoreCalcule calculé côté serveur) — entité déjà en place.
+Questions du Guide 18 phases (page 4-5) : les 3 problèmes principaux, celui qui fait perdre le
+plus de temps/coûte le plus cher/génère le plus d'erreurs, comment il est traité actuellement,
+fréquence exacte et temps perdu estimé (pour le score). Garde-fou anti-solution-prématurée
+systématique : "existe-t-il une autre manière d'obtenir le même résultat que celle que vous
+imaginez ?". Question bloquante : au moins un problème critique (🔴) clairement quantifié est
+requis (nécessaire pour prioriser le MVP en Phase 14) ; toute contradiction Demande (Phase 02)
+↔ Problème réel doit être résolue ou actée — déjà détectée par `ContradictionDetectorService`
+(Cas 1), pas de nouveau code nécessaire sur ce point.
+
+**Impact technique** : deux nouveaux composants Blazor (`EntretienProcessus.razor`,
+`EntretienProblemes.razor`), aucune migration EF Core (aucun changement de schéma), aucune
+extension du mécanisme Source/Statut. Noms de phases 3/4 déjà définitifs ("Processus métier",
+"Problèmes et besoins" — jamais marqués "(provisoire)", contrairement à 05-18) : rien à changer
+dans `CreateProjetAction.cs`/`DbSeeder.cs` pour ce lot.
 
 ## Changements v1 → v2 (résumé)
 

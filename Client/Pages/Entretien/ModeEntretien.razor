@@ -57,6 +57,14 @@ else
             </MudButton>
         </MudStack>
     }
+    else if (_phaseActive.Numero == 3)
+    {
+        <EntretienProcessus ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
+    }
+    else if (_phaseActive.Numero == 4)
+    {
+        <EntretienProblemes ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
+    }
     else if (_phaseActive.Numero == 5)
     {
         <EntretienActeurs ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
@@ -64,6 +72,10 @@ else
     else if (_phaseActive.Numero == 6)
     {
         <EntretienDonnees ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
+    }
+    else if (_phaseActive.Numero == 7)
+    {
+        <EntretienDocuments ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
     }
     else
     {

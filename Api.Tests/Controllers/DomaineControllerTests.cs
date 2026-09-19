@@ -237,6 +237,47 @@ public class DomaineControllerTests : IAsyncLifetime
         Assert.Equal("DOC-001", document!.Code);
     }
 
+    [Fact]
+    public async Task Creer_document_avec_source_et_statut_cree_un_compagnon()
+    {
+        var dto = new UpsertDocumentMetierDto("Devis", "Commercial", "Client", "PDF", null,
+            SourceInformation.Declaratif, StatutInformation.Valide);
+
+        var reponse = await _client.PostAsJsonAsync($"api/projets/{_projetId}/documents", dto);
+        var document = await reponse.Content.ReadFromJsonAsync<DocumentMetierDto>();
+
+        Assert.Equal(SourceInformation.Declaratif, document!.Source);
+        Assert.Equal(StatutInformation.Valide, document.Statut);
+    }
+
+    [Fact]
+    public async Task Creer_document_sans_source_ni_statut_ne_cree_pas_de_compagnon()
+    {
+        var dto = new UpsertDocumentMetierDto("Bon de commande", null, null, null, null);
+
+        var reponse = await _client.PostAsJsonAsync($"api/projets/{_projetId}/documents", dto);
+        var document = await reponse.Content.ReadFromJsonAsync<DocumentMetierDto>();
+
+        Assert.Null(document!.Source);
+        Assert.Null(document.Statut);
+    }
+
+    [Fact]
+    public async Task Modifier_document_avec_source_et_statut_met_a_jour_le_compagnon()
+    {
+        var creation = await _client.PostAsJsonAsync($"api/projets/{_projetId}/documents",
+            new UpsertDocumentMetierDto("Contrat", null, null, null, null, SourceInformation.Declaratif, StatutInformation.AConfirmer));
+        var document = (await creation.Content.ReadFromJsonAsync<DocumentMetierDto>())!;
+
+        var reponseModif = await _client.PutAsJsonAsync($"api/projets/{_projetId}/documents/{document.Id}",
+            new UpsertDocumentMetierDto("Contrat signé", null, null, null, null, SourceInformation.Document, StatutInformation.Valide));
+        Assert.Equal(HttpStatusCode.NoContent, reponseModif.StatusCode);
+
+        var relu = await _client.GetFromJsonAsync<DocumentMetierDto>($"api/projets/{_projetId}/documents/{document.Id}");
+        Assert.Equal(SourceInformation.Document, relu!.Source);
+        Assert.Equal(StatutInformation.Valide, relu.Statut);
+    }
+
     // --- Automatisation ---
 
     [Fact]

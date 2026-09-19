@@ -212,7 +212,7 @@ public static class DbSeeder
         4 => "Problèmes et besoins",
         5 => "Acteurs",
         6 => "Données",
-        7 => "Documents (provisoire)",
+        7 => "Documents",
         8 => "Fonctionnalités (provisoire)",
         9 => "Automatisations (provisoire)",
         10 => "Contraintes (provisoire)",
