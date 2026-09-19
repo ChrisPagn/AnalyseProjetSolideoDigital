@@ -11,6 +11,16 @@ développement**, celui que l'outil génère en Phase 18 pour un futur projet cl
 lister les entités de données pour 05-18, sans script de questions. Les noms de phases 05-18
 sont eux-mêmes marqués "(provisoire)" dans le code (`CreateProjetAction.cs`).
 
+## Point ouvert — Phases 03/04 également sans mode entretien guidé (hors périmètre de ce document)
+
+Signalé par l'utilisateur en test réel (2026-09-19) : les Phases 03 (Processus métier) et 04
+(Problèmes et besoins) n'ont, elles non plus, jamais eu de mode entretien guidé codé — seules 01
+et 02 en ont un. Contrairement aux Phases 05-18 traitées par ce document, leur contenu de
+questions existe déjà intégralement dans le Guide des 18 phases source (pages 3-5 : questions
+principales, relance, bloquantes, tout est rédigé) — donc pas de travail de rédaction à refaire,
+seulement du code à écrire une fois qu'on s'y attaque. Décision actée : terminer d'abord
+l'implémentation des Phases 05-18 (chantier en cours), traiter 03/04 dans un lot séparé ensuite.
+
 ## Changements v1 → v2 (résumé)
 
 1. **Fonctionnalité orpheline** (Phase 08) : définition corrigée, `LienTracabilite` élargi.
@@ -72,11 +82,14 @@ fois à la fin de la Phase 06, sous forme de grille cochable (`MudDataGrid`, lig
 colonnes = Entités, cases = Voir/Créer/Modifier/Supprimer/Valider) plutôt qu'un remplissage
 acteur par acteur. Cohérent avec un usage RDV rapide (cocher va plus vite que décrire).
 
-**Acteurs en brouillon dès 01/03** : le décideur et l'utilisateur final identifiés en Phase 01,
-et chaque "qui réalise cette étape" identifié en Phase 03, créent automatiquement un `Acteur`
-en brouillon (statut À confirmer côté InformationRegistre compagnon, voir mécanique Source/
-Statut plus bas) — évite une reconstitution de texte libre en Phase 05, il ne reste qu'à les
-confirmer/compléter.
+**Acteurs en brouillon dès 01/03 — reporté à l'implémentation (Lot B)** : les réponses de la
+Phase 01 (décideur/valideur/utilisateur) et les `EtapeProcessus.Acteur` de la Phase 03 sont du
+texte libre — en extraire automatiquement un `Acteur` structuré demanderait un parsing fragile
+(ex. "Marie Dupont, DG" → quel Nom, quelle Fonction ?), risque de créer des Acteurs mal formés.
+Décision actée avec l'utilisateur : pas de création automatique. À la place, la Phase 05 affiche
+un **rappel contextuel en lecture seule** (les réponses textuelles pertinentes de 01/03) pour que
+l'analyste les recopie en un clic conscient, sans extraction automatique — implémenté dans
+`EntretienActeurs.razor`.
 
 **Exemple concret** : pour un cabinet comptable, "Comptable" (fonction : gère les dossiers
 clients), "Client" (fonction : dépose ses justificatifs), "Système de facturation existant"

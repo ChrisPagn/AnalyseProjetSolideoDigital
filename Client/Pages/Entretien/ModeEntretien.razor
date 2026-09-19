@@ -57,12 +57,20 @@ else
             </MudButton>
         </MudStack>
     }
+    else if (_phaseActive.Numero == 5)
+    {
+        <EntretienActeurs ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
+    }
+    else if (_phaseActive.Numero == 6)
+    {
+        <EntretienDonnees ProjetId="@ProjetId" PhaseId="@_phaseActive.Id" />
+    }
     else
     {
         <MudAlert Severity="Severity.Info" Class="mb-4">
-            Cette phase n'a pas de questions guidées prédéfinies (au-delà du Bloc A, seules les
-            Phases 01 et 02 en ont — Guide des 18 phases). Utilisez la vue détaillée de la phase
-            pour saisir les informations, questions, risques et décisions.
+            Cette phase n'a pas encore de guidage dédié dans le mode entretien (voir
+            docs/03-proposition-phases-05-18-v2.md pour l'avancement). Utilisez la vue détaillée
+            de la phase pour saisir les informations, questions, risques et décisions.
         </MudAlert>
         <MudButton Variant="Variant.Filled" Color="Color.Primary"
                    OnClick="@(() => Navigation.NavigateTo($"/projets/{ProjetId}/phases/{_phaseActive.Numero}"))">

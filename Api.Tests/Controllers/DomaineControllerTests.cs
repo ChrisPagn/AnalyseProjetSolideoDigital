@@ -141,6 +141,89 @@ public class DomaineControllerTests : IAsyncLifetime
         Assert.Equal("ENT-001", entite!.Code);
     }
 
+    // --- Mécanisme Source/Statut (Option B, InformationRegistre compagnon — Lot B Phase 05/06) ---
+
+    [Fact]
+    public async Task Creer_acteur_avec_source_et_statut_cree_un_compagnon()
+    {
+        var dto = new UpsertActeurDto("Comptable", "Gère les dossiers", SourceInformation.Declaratif, StatutInformation.AConfirmer);
+
+        var reponse = await _client.PostAsJsonAsync($"api/projets/{_projetId}/acteurs", dto);
+        var acteur = await reponse.Content.ReadFromJsonAsync<ActeurDto>();
+
+        Assert.Equal(SourceInformation.Declaratif, acteur!.Source);
+        Assert.Equal(StatutInformation.AConfirmer, acteur.Statut);
+
+        var informations = await _client.GetFromJsonAsync<List<Shared.Dtos.Registres.InformationRegistreDto>>(
+            $"api/projets/{_projetId}/informations");
+        Assert.Contains(informations!, i => i.Libelle == $"Acteur {acteur.Code} — Comptable" && i.Statut == StatutInformation.AConfirmer);
+    }
+
+    [Fact]
+    public async Task Creer_acteur_sans_source_ni_statut_ne_cree_pas_de_compagnon()
+    {
+        var dto = new UpsertActeurDto("Client final", null);
+
+        var reponse = await _client.PostAsJsonAsync($"api/projets/{_projetId}/acteurs", dto);
+        var acteur = await reponse.Content.ReadFromJsonAsync<ActeurDto>();
+
+        Assert.Null(acteur!.Source);
+        Assert.Null(acteur.Statut);
+    }
+
+    [Fact]
+    public async Task Modifier_acteur_avec_source_et_statut_met_a_jour_le_compagnon()
+    {
+        var creation = await _client.PostAsJsonAsync($"api/projets/{_projetId}/acteurs",
+            new UpsertActeurDto("Acteur initial", null, SourceInformation.Declaratif, StatutInformation.AConfirmer));
+        var acteur = (await creation.Content.ReadFromJsonAsync<ActeurDto>())!;
+
+        var reponseModif = await _client.PutAsJsonAsync($"api/projets/{_projetId}/acteurs/{acteur.Id}",
+            new UpsertActeurDto("Acteur confirmé", null, SourceInformation.Observation, StatutInformation.Valide));
+        Assert.Equal(HttpStatusCode.NoContent, reponseModif.StatusCode);
+
+        var relu = await _client.GetFromJsonAsync<ActeurDto>($"api/projets/{_projetId}/acteurs/{acteur.Id}");
+        Assert.Equal(SourceInformation.Observation, relu!.Source);
+        Assert.Equal(StatutInformation.Valide, relu.Statut);
+    }
+
+    [Fact]
+    public async Task Creer_entite_avec_source_et_statut_cree_un_compagnon()
+    {
+        var dto = new UpsertEntiteDto("Devis", "Document commercial", "Numéro, montant", null,
+            SourceInformation.Document, StatutInformation.Valide);
+
+        var reponse = await _client.PostAsJsonAsync($"api/projets/{_projetId}/entites", dto);
+        var entite = await reponse.Content.ReadFromJsonAsync<EntiteDto>();
+
+        Assert.Equal(SourceInformation.Document, entite!.Source);
+        Assert.Equal(StatutInformation.Valide, entite.Statut);
+    }
+
+    [Fact]
+    public async Task Deux_informations_contradictoires_sur_meme_acteur_sont_detectees()
+    {
+        // Vérifie que le mécanisme Option B (InformationRegistre compagnon) reste couvert par
+        // ContradictionDetectorService existant sans modification de ce service — les compagnons
+        // sont des InformationRegistre normales, détectées par libellé normalisé identique.
+        await _client.PostAsJsonAsync($"api/projets/{_projetId}/acteurs",
+            new UpsertActeurDto("Comptable", "Gère les dossiers clients", SourceInformation.Declaratif, StatutInformation.AConfirmer));
+
+        // Une InformationRegistre manuelle avec exactement le même libellé que le compagnon
+        // généré (Acteur ACT-001 — Comptable) mais une valeur différente crée la contradiction.
+        var acteurs = await _client.GetFromJsonAsync<List<ActeurDto>>($"api/projets/{_projetId}/acteurs");
+        var libelle = $"Acteur {acteurs!.Single().Code} — Comptable";
+
+        await _client.PostAsJsonAsync($"api/projets/{_projetId}/informations",
+            new Shared.Dtos.Registres.UpsertInformationRegistreDto(null, libelle, "Valeur divergente", SourceInformation.Declaratif, StatutInformation.AConfirmer));
+
+        var reponse = await _client.PostAsync($"api/projets/{_projetId}/tracabilite/detecter-contradictions", null);
+        Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
+
+        var contradictions = await reponse.Content.ReadFromJsonAsync<List<Shared.Dtos.Domaine.ContradictionDto>>();
+        Assert.Contains(contradictions!, c => c.Type == Shared.Dtos.Domaine.TypeContradiction.InformationsContradictoires);
+    }
+
     // --- DocumentMetier ---
 
     [Fact]

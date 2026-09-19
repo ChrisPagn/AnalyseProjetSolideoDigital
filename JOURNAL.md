@@ -919,3 +919,94 @@ premier, le plus simple et indépendant : les **Notes de préparation**.
 (nouveau), `Client/Pages/Projets/Projets.razor`, `Client/_Imports.razor`,
 `Api.Tests/Controllers/ProjetsControllerTests.cs`. Voir `git status` — en attente de validation
 de l'utilisateur avant commit.
+
+## Extension du Mode Entretien aux Phases 03-18 — Lot B : Acteurs + Données (2026-09-19)
+
+### Contenu réalisé
+Deuxième lot du plan défini dans `docs/03-proposition-phases-05-18-v2.md` — le plus structurant,
+car il pose le mécanisme Source/Statut (Option B) réutilisé par les lots suivants (07, 08, 09).
+
+- **`TypeEntiteDomaine`** (nouvel enum : Acteur, Entite, DocumentMetier, Fonctionnalite,
+  Automatisation) — discriminant du lien polymorphe.
+- **`InformationRegistre`** étendu : `EntiteType`/`EntiteReferenceId` (lien polymorphe optionnel
+  vers une entité du domaine, les deux renseignés ensemble ou pas du tout — contrainte CHECK en
+  base). Migration `AddLienPolymorpheInformationRegistre`.
+- **`InformationCompagnonService`** (nouveau, réutilisable par tous les lots à venir 07-09) :
+  crée/synchronise l'InformationRegistre compagnon d'une entité du domaine.
+- **Découverte en cours de route** : `ActeursController`/`EntitesController` (CRUD complet)
+  existaient déjà depuis l'étape 6 — pas besoin de les recréer, seulement de les étendre.
+  `UpsertActeurDto`/`UpsertEntiteDto` reçoivent `Source`/`Statut` optionnels ; `ActeurDto`/
+  `EntiteDto` les exposent en retour. Le CRUD existant (vue "Domaine analysé") continue de
+  fonctionner à l'identique en ne les envoyant pas.
+- **Bonne surprise** : `ContradictionDetectorService` (Cas 2, comparaison par libellé normalisé)
+  couvre automatiquement les nouveaux compagnons sans aucune modification — ce sont des
+  `InformationRegistre` normales. Vérifié par un test dédié.
+- **Correction en cours d'implémentation** : le compagnon doit porter une `Valeur` significative
+  (Fonction pour un Acteur, Description pour une Entite) pour être comparable par
+  `ContradictionDetectorService` — un premier essai sans `Valeur` a fait échouer le test de
+  contradiction, corrigé avant de continuer.
+- **Phase 05 (Acteurs)** : `EntretienActeurs.razor` — création d'Acteurs avec Source/Statut, plus
+  un rappel contextuel des réponses pertinentes des Phases 01/03 (voir point reporté ci-dessous).
+- **Phase 06 (Données)** : `EntretienDonnees.razor` — création d'Entités avec Source/Statut, puis
+  grille de permissions Acteur × Entite (`MudSimpleTable` avec cases à cocher Voir/Créer/
+  Modifier/Supprimer/Valider) en fin de phase, réutilisant les endpoints `AjouterPermissionAsync`/
+  `ModifierPermissionAsync` déjà exposés côté Api.
+- `ModeEntretien.razor` route désormais explicitement vers ces deux composants pour les
+  Phases 05/06 ; le message générique ("pas de guidage dédié") ne s'affiche plus que pour les
+  phases pas encore traitées.
+- Noms de phases 5 et 6 mis à jour dans `CreateProjetAction.cs` et `DbSeeder.cs` (retrait de
+  "(provisoire)") — seules ces deux phases, les autres restent provisoires jusqu'à leur lot.
+- Tests xUnit : 5 nouveaux (`Creer_acteur_avec_source_et_statut_cree_un_compagnon`,
+  `Creer_acteur_sans_source_ni_statut_ne_cree_pas_de_compagnon`,
+  `Modifier_acteur_avec_source_et_statut_met_a_jour_le_compagnon`,
+  `Creer_entite_avec_source_et_statut_cree_un_compagnon`,
+  `Deux_informations_contradictoires_sur_meme_acteur_sont_detectees`). 132/132 tests passent au
+  total (127 hérités + 5 nouveaux).
+- Flux vérifié dans un vrai navigateur (Chrome headless + CDP) : Phase 05 → ajout d'un Acteur
+  "Comptable" (Validé) → Phase 06 → ajout d'une Entité "Devis" (Validé) → grille de permissions
+  affichée avec Comptable × Devis → clic sur la case "Voir" → vérifié côté Api que la Permission a
+  bien été créée avec `peutVoir: true`, liée au bon Acteur et à la bonne Entité. Aucune erreur
+  console. Données de test nettoyées après vérification.
+
+### Point reporté (décision actée avec l'utilisateur)
+**Acteurs brouillon automatiques depuis 01/03** : le document v2 prévoyait la création
+automatique d'Acteurs en brouillon à partir des réponses textuelles des Phases 01/03. En
+pratique, ces réponses sont du texte libre (ex. "Marie Dupont, directrice générale") — en
+extraire un Nom/une Fonction structurés demanderait un parsing fragile. Décision : pas
+d'extraction automatique. `EntretienActeurs.razor` affiche à la place un rappel contextuel en
+lecture seule des réponses pertinentes de 01/03, que l'analyste recopie en un clic conscient.
+Document `docs/03-proposition-phases-05-18-v2.md` mis à jour en conséquence.
+
+### Décisions d'architecture prises
+- Option B confirmée dans son détail technique : lien polymorphe par enum typé (`EntiteType`)
+  plutôt qu'une chaîne libre — cohérent avec l'interdiction d'ENUM SQL natif (stocké en string
+  via `HasConversion<string>`, comme tous les autres enums du projet) tout en gardant la garantie
+  de cohérence à la compilation qu'une chaîne libre n'aurait pas offerte.
+- Extension des DTOs d'upsert existants (`UpsertActeurDto`/`UpsertEntiteDto`) plutôt qu'un
+  endpoint séparé pour Source/Statut : un seul appel HTTP depuis le Mode Entretien, la vue
+  "Domaine analysé" existante n'a rien à changer (paramètres optionnels, `null` par défaut).
+- Grille de permissions en fin de Phase 06 plutôt qu'en Phase 05 : les permissions portent sur
+  des Entites qui n'existent pas encore au moment de la Phase 05 — l'ordre du document v1 aurait
+  été inapplicable en pratique.
+
+### Problèmes connus / points ouverts
+- Lots C à H restent à implémenter (07 Documents, 08+09 Fonctionnalités+Automatisations,
+  10/11/12/13/15 + 16 Synthèse/17 Validation [inversion actée en v2], 14 Priorisation MVP, 18) —
+  voir `docs/03-proposition-phases-05-18-v2.md`.
+- L'extension de `LienTracabilite` (champ `InformationRegistreId` pour les fonctionnalités
+  transversales justifiées par une Contrainte/Règle/Exigence NF) prévue par le document n'a pas
+  encore été codée — nécessaire au Lot D (Phase 08), pas à ce lot.
+- Rien n'a encore été commité pour ce lot — voir `git status`.
+
+### Fichiers créés/modifiés
+`Shared/Enums/TypeEntiteDomaine.cs` (nouveau), `Api/Data/Entities/InformationRegistre.cs`,
+`Api/Data/AnalyseProjetDbContext.cs`, `Api/Data/Migrations/*_AddLienPolymorpheInformationRegistre.cs`
+(nouveau), `Api/Services/InformationCompagnonService.cs` (nouveau), `Api/Program.cs`,
+`Shared/Dtos/Domaine/ActeurDto.cs`, `Shared/Dtos/Domaine/EntiteDto.cs`,
+`Api/Controllers/ActeursController.cs`, `Api/Controllers/EntitesController.cs`,
+`Client/Services/DomaineApiClient.cs`, `Client/Pages/Entretien/EntretienActeurs.razor` (nouveau),
+`Client/Pages/Entretien/EntretienDonnees.razor` (nouveau),
+`Client/Pages/Entretien/ModeEntretien.razor`, `Api/Actions/CreateProjetAction.cs`,
+`Api/Data/DbSeeder.cs`, `Api.Tests/Controllers/DomaineControllerTests.cs`,
+`docs/03-proposition-phases-05-18-v2.md`. Voir `git status` — en attente de validation de
+l'utilisateur avant commit.

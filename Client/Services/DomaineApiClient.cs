@@ -52,6 +52,9 @@ public class DomaineApiClient(HttpClient httpClient)
     public async Task<PermissionDto?> AjouterPermissionAsync(int projetId, int acteurId, UpsertPermissionDto dto) =>
         await EnvoyerEtLireAsync<PermissionDto>(HttpMethod.Post, $"api/projets/{projetId}/acteurs/{acteurId}/permissions", dto);
 
+    public async Task<bool> ModifierPermissionAsync(int projetId, int acteurId, int permissionId, UpsertPermissionDto dto) =>
+        (await EnvoyerAsync(HttpMethod.Put, $"api/projets/{projetId}/acteurs/{acteurId}/permissions/{permissionId}", dto)).IsSuccessStatusCode;
+
     public async Task<bool> SupprimerPermissionAsync(int projetId, int acteurId, int permissionId) =>
         (await EnvoyerAsync(HttpMethod.Delete, $"api/projets/{projetId}/acteurs/{acteurId}/permissions/{permissionId}")).IsSuccessStatusCode;
 

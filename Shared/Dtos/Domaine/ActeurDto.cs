@@ -1,3 +1,5 @@
+using Shared.Enums;
+
 namespace Shared.Dtos.Domaine;
 
 public record ActeurDto(
@@ -6,9 +8,16 @@ public record ActeurDto(
     int ProjetId,
     string Nom,
     string? Fonction,
-    IReadOnlyList<PermissionDto> Permissions);
+    IReadOnlyList<PermissionDto> Permissions,
+    SourceInformation? Source,
+    StatutInformation? Statut);
 
-public record UpsertActeurDto(string Nom, string? Fonction);
+/// <summary>
+/// Source/Statut optionnels : la vue "Domaine analysé" (CRUD direct) ne les envoie pas et laisse
+/// le Controller appliquer des valeurs par défaut ; le Mode Entretien (Phase 05) les renseigne
+/// explicitement (voir InformationCompagnonService, Option B).
+/// </summary>
+public record UpsertActeurDto(string Nom, string? Fonction, SourceInformation? Source = null, StatutInformation? Statut = null);
 
 public record PermissionDto(
     int Id,

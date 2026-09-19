@@ -1,0 +1,192 @@
+@inject DomaineApiClient DomaineApi
+@inject ISnackbar Snackbar
+
+@*
+    Phase 06 — Données (docs/03-proposition-phases-05-18-v2.md) : lister les objets métier du
+    domaine, puis qualifier la matrice Acteur × Entite (grille de permissions) en fin de phase —
+    plus rapide en RDV qu'un remplissage acteur par acteur (cocher plutôt que décrire).
+*@
+<MudPaper Class="pa-6 mb-4" Elevation="2">
+    <MudText Typo="Typo.h5" Class="mb-1">Données</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Quels objets métier l'outil futur devra-t-il gérer ?
+    </MudText>
+
+    <MudForm @ref="_form">
+        <MudTextField T="string" @bind-Value="_nom" Label="Nom de cet objet métier"
+                       AutoFocus="true" Class="mb-4" Style="min-height:44px" Required="true" />
+        <MudTextField T="string" @bind-Value="_description" Label="À quoi sert-il ?" Class="mb-4" Style="min-height:44px" />
+        <MudTextField T="string" @bind-Value="_attributs" Label="Quelles informations contient-il ?" Lines="2" Class="mb-4" Style="min-height:44px" />
+        <MudTextField T="string" @bind-Value="_relations" Label="Lié à d'autres objets métier déjà cités ?" Class="mb-4" Style="min-height:44px" />
+
+        <MudSelect T="SourceInformation" @bind-Value="_source" Label="Source" Class="mb-4">
+            <MudSelectItem Value="SourceInformation.Declaratif">Déclaratif (dit par le client)</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.Observation">Observation vérifiée</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.Document">Document fourni</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.SystemeExistant">Système/outil existant</MudSelectItem>
+        </MudSelect>
+    </MudForm>
+
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" FullWidth="true"
+                   Disabled="@(_enCours || string.IsNullOrWhiteSpace(_nom))"
+                   OnClick="@(() => AjouterEntiteAsync(StatutInformation.Valide))" Style="min-height:44px">
+            Ajouter — Validé
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Large"
+                   Disabled="@(_enCours || string.IsNullOrWhiteSpace(_nom))"
+                   OnClick="@(() => AjouterEntiteAsync(StatutInformation.AConfirmer))" Style="min-height:44px">
+            Ajouter — À confirmer
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudPaper Class="pa-6" Elevation="2">
+    <MudText Typo="Typo.h5" Class="mb-1">Permissions</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Pour chaque Acteur (Phase 05) et chaque Entité ci-dessus, qui peut faire quoi ?
+    </MudText>
+
+    @if (_acteurs.Count == 0 || _entites.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">
+            @(_acteurs.Count == 0 ? "Aucun acteur identifié en Phase 05 pour l'instant." : "Ajoutez au moins une entité ci-dessus pour commencer la matrice.")
+        </MudAlert>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Bordered="true" Style="overflow-x:auto">
+            <thead>
+                <tr>
+                    <th>Acteur</th>
+                    <th>Entité</th>
+                    <th>Voir</th>
+                    <th>Créer</th>
+                    <th>Modifier</th>
+                    <th>Supprimer</th>
+                    <th>Valider</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var acteur in _acteurs)
+                {
+                    @foreach (var entite in _entites)
+                    {
+                        var cle = (acteur.Id, entite.Nom);
+                        <tr>
+                            <td>@acteur.Nom</td>
+                            <td>@entite.Nom</td>
+                            @foreach (var champ in _champsPermission)
+                            {
+                                <td>
+                                    <MudCheckBox T="bool" Value="@ObtenirValeur(cle, champ)"
+                                                 ValueChanged="@(v => ModifierPermissionAsync(acteur, entite.Nom, champ, v))" />
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public int ProjetId { get; set; }
+    [Parameter, EditorRequired] public int PhaseId { get; set; }
+
+    private static readonly string[] _champsPermission = ["PeutVoir", "PeutCreer", "PeutModifier", "PeutSupprimer", "PeutValider"];
+
+    private MudForm? _form;
+    private string _nom = string.Empty;
+    private string? _description;
+    private string? _attributs;
+    private string? _relations;
+    private SourceInformation _source = SourceInformation.Declaratif;
+    private bool _enCours;
+
+    private List<EntiteDto> _entites = [];
+    private List<ActeurDto> _acteurs = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        _entites = (await DomaineApi.GetEntitesAsync(ProjetId)).ToList();
+        _acteurs = (await DomaineApi.GetActeursAsync(ProjetId)).ToList();
+    }
+
+    private async Task AjouterEntiteAsync(StatutInformation statut)
+    {
+        if (_form is null || string.IsNullOrWhiteSpace(_nom))
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertEntiteDto(_nom, _description, _attributs, _relations, _source, statut);
+        var succes = await DomaineApi.CreerEntiteAsync(ProjetId, dto) is not null;
+        _enCours = false;
+
+        if (succes)
+        {
+            _nom = string.Empty;
+            _description = null;
+            _attributs = null;
+            _relations = null;
+            await ChargerAsync();
+            Snackbar.Add("Entité ajoutée.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Impossible d'ajouter l'entité.", Severity.Error);
+        }
+    }
+
+    private bool ObtenirValeur((int ActeurId, string EntiteNom) cle, string champ)
+    {
+        var acteur = _acteurs.First(a => a.Id == cle.ActeurId);
+        var permission = acteur.Permissions.FirstOrDefault(p => p.EntiteConcernee == cle.EntiteNom);
+        if (permission is null)
+        {
+            return false;
+        }
+
+        return champ switch
+        {
+            "PeutVoir" => permission.PeutVoir,
+            "PeutCreer" => permission.PeutCreer,
+            "PeutModifier" => permission.PeutModifier,
+            "PeutSupprimer" => permission.PeutSupprimer,
+            "PeutValider" => permission.PeutValider,
+            _ => false
+        };
+    }
+
+    private async Task ModifierPermissionAsync(ActeurDto acteur, string entiteNom, string champ, bool valeur)
+    {
+        var permission = acteur.Permissions.FirstOrDefault(p => p.EntiteConcernee == entiteNom);
+
+        var peutVoir = champ == "PeutVoir" ? valeur : permission?.PeutVoir ?? false;
+        var peutCreer = champ == "PeutCreer" ? valeur : permission?.PeutCreer ?? false;
+        var peutModifier = champ == "PeutModifier" ? valeur : permission?.PeutModifier ?? false;
+        var peutSupprimer = champ == "PeutSupprimer" ? valeur : permission?.PeutSupprimer ?? false;
+        var peutValider = champ == "PeutValider" ? valeur : permission?.PeutValider ?? false;
+
+        var dto = new UpsertPermissionDto(entiteNom, peutVoir, peutCreer, peutModifier, peutSupprimer, peutValider);
+
+        if (permission is null)
+        {
+            await DomaineApi.AjouterPermissionAsync(ProjetId, acteur.Id, dto);
+        }
+        else
+        {
+            await DomaineApi.ModifierPermissionAsync(ProjetId, acteur.Id, permission.Id, dto);
+        }
+
+        await ChargerAsync();
+    }
+}

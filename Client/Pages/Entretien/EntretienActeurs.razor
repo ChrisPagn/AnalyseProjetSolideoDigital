@@ -1,0 +1,163 @@
+@inject DomaineApiClient DomaineApi
+@inject RegistresApiClient RegistresApi
+@inject ISnackbar Snackbar
+
+@*
+    Phase 05 — Acteurs (docs/03-proposition-phases-05-18-v2.md) : identifier qui interagit avec
+    le futur outil. Les permissions (matrice Acteur × Entite) se saisissent en fin de Phase 06,
+    pas ici — au moment de la Phase 05 les Entites n'existent pas encore.
+*@
+<MudPaper Class="pa-6" Elevation="2">
+    <MudText Typo="Typo.h5" Class="mb-1">Acteurs</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Qui interagit avec le futur outil ? Personnes, groupes, ou systèmes existants.
+    </MudText>
+
+    @if (_rappelPhase01.Count > 0 || _rappelPhase03.Count > 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            <MudText Typo="Typo.body2" Class="mb-1"><b>Pour rappel, vous avez mentionné :</b></MudText>
+            @foreach (var rappel in _rappelPhase01)
+            {
+                <MudText Typo="Typo.body2">— (Phase 01) @rappel</MudText>
+            }
+            @foreach (var rappel in _rappelPhase03)
+            {
+                <MudText Typo="Typo.body2">— (Phase 03, étape du processus) @rappel</MudText>
+            }
+        </MudAlert>
+    }
+
+    <MudForm @ref="_form">
+        <MudTextField T="string" @bind-Value="_nom" Label="Nom ou rôle de la personne/du groupe/du système"
+                       AutoFocus="true" Class="mb-4" Style="min-height:44px" Required="true" />
+        <MudTextField T="string" @bind-Value="_fonction" Label="Fonction dans l'organisation" Class="mb-4" Style="min-height:44px" />
+
+        <MudSelect T="SourceInformation" @bind-Value="_source" Label="Source" Class="mb-4">
+            <MudSelectItem Value="SourceInformation.Declaratif">Déclaratif (dit par le client)</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.Observation">Observation vérifiée</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.Document">Document fourni</MudSelectItem>
+            <MudSelectItem Value="SourceInformation.SystemeExistant">Système/outil existant</MudSelectItem>
+        </MudSelect>
+    </MudForm>
+
+    <MudStack Row="true" Spacing="2" Class="mb-6">
+        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" FullWidth="true"
+                   Disabled="@(_enCours || string.IsNullOrWhiteSpace(_nom))"
+                   OnClick="@(() => AjouterActeurAsync(StatutInformation.Valide))" Style="min-height:44px">
+            Ajouter — Validé
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Large"
+                   Disabled="@(_enCours || string.IsNullOrWhiteSpace(_nom))"
+                   OnClick="@(() => AjouterActeurAsync(StatutInformation.AConfirmer))" Style="min-height:44px">
+            Ajouter — À confirmer
+        </MudButton>
+    </MudStack>
+
+    <MudDivider Class="mb-4" />
+
+    <MudText Typo="Typo.subtitle1" Class="mb-2">Acteurs déjà identifiés (@_acteurs.Count)</MudText>
+    @if (_acteurs.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Aucun acteur pour l'instant.</MudText>
+    }
+    else
+    {
+        <MudList T="string">
+            @foreach (var acteur in _acteurs)
+            {
+                <MudListItem T="string">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.body1">@acteur.Nom</MudText>
+                            @if (!string.IsNullOrWhiteSpace(acteur.Fonction))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@acteur.Fonction</MudText>
+                            }
+                        </div>
+                        @if (acteur.Statut is StatutInformation.AConfirmer)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning">À confirmer</MudChip>
+                        }
+                        else if (acteur.Statut is StatutInformation.Valide)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success">Validé</MudChip>
+                        }
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public int ProjetId { get; set; }
+    [Parameter, EditorRequired] public int PhaseId { get; set; }
+
+    private MudForm? _form;
+    private string _nom = string.Empty;
+    private string? _fonction;
+    private SourceInformation _source = SourceInformation.Declaratif;
+    private bool _enCours;
+
+    private List<ActeurDto> _acteurs = [];
+    private List<string> _rappelPhase01 = [];
+    private List<string> _rappelPhase03 = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ChargerActeursAsync();
+        await ChargerRappelsAsync();
+    }
+
+    private async Task ChargerActeursAsync()
+    {
+        _acteurs = (await DomaineApi.GetActeursAsync(ProjetId)).ToList();
+    }
+
+    private async Task ChargerRappelsAsync()
+    {
+        var phases = await RegistresApi.GetInformationsAsync(ProjetId);
+
+        _rappelPhase01 = phases
+            .Where(i => i.PhaseNumero == 1 && !string.IsNullOrWhiteSpace(i.Valeur)
+                        && (i.Libelle.Contains("décide", StringComparison.OrdinalIgnoreCase)
+                            || i.Libelle.Contains("valide", StringComparison.OrdinalIgnoreCase)
+                            || i.Libelle.Contains("utilisera", StringComparison.OrdinalIgnoreCase)))
+            .Select(i => $"{i.Libelle} → {i.Valeur}")
+            .ToList();
+
+        var processus = await DomaineApi.GetProcessusAsync(ProjetId);
+        _rappelPhase03 = processus
+            .SelectMany(p => p.Etapes)
+            .Select(e => e.Acteur)
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Distinct()
+            .ToList();
+    }
+
+    private async Task AjouterActeurAsync(StatutInformation statut)
+    {
+        if (_form is null || string.IsNullOrWhiteSpace(_nom))
+        {
+            return;
+        }
+
+        _enCours = true;
+        var dto = new UpsertActeurDto(_nom, _fonction, _source, statut);
+        var succes = await DomaineApi.CreerActeurAsync(ProjetId, dto) is not null;
+        _enCours = false;
+
+        if (succes)
+        {
+            _nom = string.Empty;
+            _fonction = null;
+            await ChargerActeursAsync();
+            Snackbar.Add("Acteur ajouté.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Impossible d'ajouter l'acteur.", Severity.Error);
+        }
+    }
+}

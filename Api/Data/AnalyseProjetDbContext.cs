@@ -71,6 +71,7 @@ public class AnalyseProjetDbContext(
             e.Property(i => i.Libelle).IsRequired().HasMaxLength(300);
             e.Property(i => i.Source).HasConversion<string>().HasMaxLength(30);
             e.Property(i => i.Statut).HasConversion<string>().HasMaxLength(30);
+            e.Property(i => i.EntiteType).HasConversion<string>().HasMaxLength(30);
             e.HasOne(i => i.Projet)
                 .WithMany(p => p.Informations)
                 .HasForeignKey(i => i.ProjetId)
@@ -80,6 +81,13 @@ public class AnalyseProjetDbContext(
                 .HasForeignKey(i => i.PhaseId)
                 .OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(i => new { i.ProjetId, i.Code }).IsUnique();
+            e.HasIndex(i => new { i.EntiteType, i.EntiteReferenceId });
+
+            // EntiteType et EntiteReferenceId sont renseignés ensemble ou pas du tout (lien
+            // polymorphe optionnel, Option B — voir docs/03-proposition-phases-05-18-v2.md).
+            e.ToTable(t => t.HasCheckConstraint(
+                "CK_InformationRegistre_LienPolymorpheCoherent",
+                "(\"EntiteType\" IS NULL AND \"EntiteReferenceId\" IS NULL) OR (\"EntiteType\" IS NOT NULL AND \"EntiteReferenceId\" IS NOT NULL)"));
         });
 
         builder.Entity<QuestionRegistre>(e =>

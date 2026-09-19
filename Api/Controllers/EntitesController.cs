@@ -5,13 +5,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Shared.Dtos.Domaine;
+using Shared.Enums;
 
 namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/projets/{projetId:int}/entites")]
-public class EntitesController(AnalyseProjetDbContext db, CodeSequenceService codeSequence) : ControllerBase
+public class EntitesController(
+    AnalyseProjetDbContext db, CodeSequenceService codeSequence, InformationCompagnonService informationCompagnon)
+    : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<EntiteDto>>> GetToutes(int projetId, CancellationToken cancellationToken)
@@ -24,21 +27,26 @@ public class EntitesController(AnalyseProjetDbContext db, CodeSequenceService co
         var entites = await db.Entites
             .Where(e => e.ProjetId == projetId)
             .OrderBy(e => e.Id)
-            .Select(e => new EntiteDto(e.Id, e.Code, e.ProjetId, e.Nom, e.Description, e.Attributs, e.Relations))
             .ToListAsync(cancellationToken);
 
-        return Ok(entites);
+        var compagnons = await db.InformationsRegistre
+            .Where(i => i.ProjetId == projetId && i.EntiteType == TypeEntiteDomaine.Entite)
+            .ToDictionaryAsync(i => i.EntiteReferenceId!.Value, cancellationToken);
+
+        return Ok(entites.Select(e => VersDto(e, compagnons.GetValueOrDefault(e.Id))).ToList());
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<EntiteDto>> GetParId(int projetId, int id, CancellationToken cancellationToken)
     {
-        var entite = await db.Entites
-            .Where(e => e.ProjetId == projetId && e.Id == id)
-            .Select(e => new EntiteDto(e.Id, e.Code, e.ProjetId, e.Nom, e.Description, e.Attributs, e.Relations))
-            .FirstOrDefaultAsync(cancellationToken);
+        var entite = await db.Entites.FirstOrDefaultAsync(e => e.ProjetId == projetId && e.Id == id, cancellationToken);
+        if (entite is null)
+        {
+            return NotFound();
+        }
 
-        return entite is null ? NotFound() : Ok(entite);
+        var compagnon = await informationCompagnon.ObtenirAsync(projetId, TypeEntiteDomaine.Entite, id, cancellationToken);
+        return Ok(VersDto(entite, compagnon));
     }
 
     [HttpPost]
@@ -48,6 +56,8 @@ public class EntitesController(AnalyseProjetDbContext db, CodeSequenceService co
         {
             return NotFound();
         }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         var code = await codeSequence.ProchainCodeAsync(projetId, "ENT", cancellationToken);
 
@@ -64,8 +74,17 @@ public class EntitesController(AnalyseProjetDbContext db, CodeSequenceService co
         db.Entites.Add(entite);
         await db.SaveChangesAsync(cancellationToken);
 
-        var resultDto = new EntiteDto(entite.Id, entite.Code, entite.ProjetId, entite.Nom, entite.Description, entite.Attributs, entite.Relations);
-        return CreatedAtAction(nameof(GetParId), new { projetId, id = entite.Id }, resultDto);
+        InformationRegistre? compagnon = null;
+        if (dto.Source.HasValue && dto.Statut.HasValue)
+        {
+            compagnon = await informationCompagnon.CreerAsync(
+                projetId, null, TypeEntiteDomaine.Entite, entite.Id, $"Entité {code} — {dto.Nom}", dto.Description,
+                dto.Source.Value, dto.Statut.Value, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return CreatedAtAction(nameof(GetParId), new { projetId, id = entite.Id }, VersDto(entite, compagnon));
     }
 
     [HttpPut("{id:int}")]
@@ -81,8 +100,15 @@ public class EntitesController(AnalyseProjetDbContext db, CodeSequenceService co
         entite.Description = dto.Description;
         entite.Attributs = dto.Attributs;
         entite.Relations = dto.Relations;
-
         await db.SaveChangesAsync(cancellationToken);
+
+        if (dto.Source.HasValue && dto.Statut.HasValue)
+        {
+            await informationCompagnon.ModifierOuCreerAsync(
+                projetId, null, TypeEntiteDomaine.Entite, entite.Id, $"Entité {entite.Code} — {dto.Nom}", dto.Description,
+                dto.Source.Value, dto.Statut.Value, cancellationToken);
+        }
+
         return NoContent();
     }
 
@@ -99,4 +125,7 @@ public class EntitesController(AnalyseProjetDbContext db, CodeSequenceService co
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
+
+    private static EntiteDto VersDto(Entite e, InformationRegistre? compagnon) => new(
+        e.Id, e.Code, e.ProjetId, e.Nom, e.Description, e.Attributs, e.Relations, compagnon?.Source, compagnon?.Statut);
 }

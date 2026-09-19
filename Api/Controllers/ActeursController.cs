@@ -5,13 +5,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Shared.Dtos.Domaine;
+using Shared.Enums;
 
 namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/projets/{projetId:int}/acteurs")]
-public class ActeursController(AnalyseProjetDbContext db, CodeSequenceService codeSequence) : ControllerBase
+public class ActeursController(
+    AnalyseProjetDbContext db, CodeSequenceService codeSequence, InformationCompagnonService informationCompagnon)
+    : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ActeurDto>>> GetTous(int projetId, CancellationToken cancellationToken)
@@ -27,7 +30,8 @@ public class ActeursController(AnalyseProjetDbContext db, CodeSequenceService co
             .OrderBy(a => a.Id)
             .ToListAsync(cancellationToken);
 
-        return Ok(acteurs.Select(VersDto).ToList());
+        var compagnons = await ObtenirCompagnonsAsync(projetId, cancellationToken);
+        return Ok(acteurs.Select(a => VersDto(a, compagnons)).ToList());
     }
 
     [HttpGet("{id:int}")]
@@ -38,7 +42,13 @@ public class ActeursController(AnalyseProjetDbContext db, CodeSequenceService co
             .Include(a => a.Permissions)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return acteur is null ? NotFound() : Ok(VersDto(acteur));
+        if (acteur is null)
+        {
+            return NotFound();
+        }
+
+        var compagnon = await informationCompagnon.ObtenirAsync(projetId, TypeEntiteDomaine.Acteur, id, cancellationToken);
+        return Ok(VersDto(acteur, compagnon));
     }
 
     [HttpPost]
@@ -49,13 +59,25 @@ public class ActeursController(AnalyseProjetDbContext db, CodeSequenceService co
             return NotFound();
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
         var code = await codeSequence.ProchainCodeAsync(projetId, "ACT", cancellationToken);
         var acteur = new Acteur { Code = code, ProjetId = projetId, Nom = dto.Nom, Fonction = dto.Fonction };
 
         db.Acteurs.Add(acteur);
         await db.SaveChangesAsync(cancellationToken);
 
-        return CreatedAtAction(nameof(GetParId), new { projetId, id = acteur.Id }, VersDto(acteur));
+        InformationRegistre? compagnon = null;
+        if (dto.Source.HasValue && dto.Statut.HasValue)
+        {
+            compagnon = await informationCompagnon.CreerAsync(
+                projetId, null, TypeEntiteDomaine.Acteur, acteur.Id, $"Acteur {code} — {dto.Nom}", dto.Fonction,
+                dto.Source.Value, dto.Statut.Value, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return CreatedAtAction(nameof(GetParId), new { projetId, id = acteur.Id }, VersDto(acteur, compagnon));
     }
 
     [HttpPut("{id:int}")]
@@ -69,8 +91,15 @@ public class ActeursController(AnalyseProjetDbContext db, CodeSequenceService co
 
         acteur.Nom = dto.Nom;
         acteur.Fonction = dto.Fonction;
-
         await db.SaveChangesAsync(cancellationToken);
+
+        if (dto.Source.HasValue && dto.Statut.HasValue)
+        {
+            await informationCompagnon.ModifierOuCreerAsync(
+                projetId, null, TypeEntiteDomaine.Acteur, acteur.Id, $"Acteur {acteur.Code} — {dto.Nom}", dto.Fonction,
+                dto.Source.Value, dto.Statut.Value, cancellationToken);
+        }
+
         return NoContent();
     }
 
@@ -161,8 +190,17 @@ public class ActeursController(AnalyseProjetDbContext db, CodeSequenceService co
         return NoContent();
     }
 
-    private static ActeurDto VersDto(Acteur a) => new(
-        a.Id, a.Code, a.ProjetId, a.Nom, a.Fonction, a.Permissions.Select(VersDtoPermission).ToList());
+    private async Task<Dictionary<int, InformationRegistre>> ObtenirCompagnonsAsync(int projetId, CancellationToken cancellationToken) =>
+        await db.InformationsRegistre
+            .Where(i => i.ProjetId == projetId && i.EntiteType == TypeEntiteDomaine.Acteur)
+            .ToDictionaryAsync(i => i.EntiteReferenceId!.Value, cancellationToken);
+
+    private static ActeurDto VersDto(Acteur a, Dictionary<int, InformationRegistre> compagnons) =>
+        VersDto(a, compagnons.GetValueOrDefault(a.Id));
+
+    private static ActeurDto VersDto(Acteur a, InformationRegistre? compagnon) => new(
+        a.Id, a.Code, a.ProjetId, a.Nom, a.Fonction, a.Permissions.Select(VersDtoPermission).ToList(),
+        compagnon?.Source, compagnon?.Statut);
 
     private static PermissionDto VersDtoPermission(Permission p) => new(
         p.Id, p.ActeurId, p.EntiteConcernee, p.PeutVoir, p.PeutCreer, p.PeutModifier, p.PeutSupprimer, p.PeutValider);
